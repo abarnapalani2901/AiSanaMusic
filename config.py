@@ -9,7 +9,7 @@ load_dotenv()
 # Get this value from my.telegram.org/apps
 API_ID = int(getenv("API_ID","8045459"))
 API_HASH = getenv("API_HASH", "e6d1f09120e17a4372fe022dde88511b")
-BOT_TOKEN = getenv("BOT_TOKEN", "2096983652:AAG_4MVAdZ8akrRmvIl7228CKrRFOYogLzY")
+BOT_TOKEN = getenv("BOT_TOKEN", "7992290736:AAGD8qaq9az6oFSkoU8bnDZQWELrVUZLuJA")
 
 # Get your mongo url from cloud.mongodb.com
 OWNER_USERNAME = getenv("OWNER_USERNAME","rajeshrakis")
@@ -17,7 +17,7 @@ BOT_USERNAME = getenv("BOT_USERNAME", "thedakkidaikathaval_bot")
 BOT_NAME = getenv("BOT_NAME", "𝞖𝘌𝘈𝘙𝘛𝞑𝘌𝘈𝘛𝂬♡𝂬𝘿𝘙𝘜𝘎𝘡")
 ASSUSERNAME = getenv("ASSUSERNAME", "Apple_Ponnu")
 EVALOP = list(map(int, getenv("EVALOP", "1281282633 8399160924 6773435708").split()))
-MONGO_DB_URI = getenv("MONGO_DB_URI","mongodb+srv://heartbeat:Beat7Heart@heartbeat.1h1nbxv.mongodb.net/?retryWrites=true&w=majority") #mongodb+srv://zewdatabase:ijoXgdmQ0NCyg9DO@zewgame.urb3i.mongodb.net/ontap?retryWrites=true&w=majority")
+MONGO_DB_URI = getenv("MONGO_DB_URI","mongodb+srv://ghosttbatt:Ghost2021@ghosttbatt.ocbirts.mongodb.net/?retryWrites=true&w=majority") #mongodb+srv://zewdatabase:ijoXgdmQ0NCyg9DO@zewgame.urb3i.mongodb.net/ontap?retryWrites=true&w=majority")
 GPT_API = getenv("GPT_API", "sk-proj-h6pk40oVRIxpXwrf3i50T3BlbkFJGVET8wX1yJtdi0zCWjDQ")
 PLAYHT_API = getenv("PLAYHT_API", "22e323f342024c0fb4ee430eeb9d0011")
 DATABASE_NAME = getenv("DATABASE_NAME","ghosttFed")
@@ -40,7 +40,7 @@ SUDOERS = getenv("SUDOERS", "1281282633 8399160924 6773435708").split()
 
 SUPPORT_CHANNEL = getenv("SUPPORT_CHANNEL", "https://t.me/HeartBeat_Offi")
 SUPPORT_CHAT = getenv("SUPPORT_CHAT", "https://t.me/HeartBeat_Fam")
-MUST_JOIN = getenv("MUST_JOIN", "HeartBeat_Fam")
+MUST_JOIN = getenv("MUST_JOIN", "HeartBeat_Offi")
 
 #Ranking
 AUTOPOST_TIME_HOUR = 21
@@ -58,7 +58,7 @@ AUTO_LEAVING_ASSISTANT = False
 AUTO_GCAST = os.getenv("AUTO_GCAST","False")
 
 #Auto Broadcast Message That You Want Use In Auto Broadcast In All Groups.
-AUTO_GCAST_MSG = getenv("AUTO_GCAST_MSG", "<blockquote>⋆｡°✩ **𝐋ᴇᴛƨ𝐕ɪʙᴇ𝐎ᴜᴛ** ✩°｡⋆\n[𑫏ཉⅬᤌໍᤌ᭄ᰈⅬᤌໍᤌ𑂞ཉথ๓ํ](https://t.me/thedakkidaikathaval_bot)</blockquote>\n<blockquote>➽───𝐅ᴇᴧᴛᴜꝛᴇ𝗌-ɪɴ𝗌ɪᴅᴇ───❥\n🔻 ꝛᴏ𝗌ᴇ ғᴜηᴄᴛɪᴏɴ𝗌|ғᴇᴅ ❅ ꝛᴧηᴋɪɴɢ\n🔻 ᴡʜɪ𝗌ᴘᴇꝛ ϻ𝗌ɢ ❅ 𝗌ᴧηɢ-ϻᴧᴛᴧ\n🔻 ϻᴇɴᴛɪᴏη ❅ ᴄʜᴧᴛ|ꝛᴇᴧᴄᴛ\n─⋆｡°✩ **𝐋ᴏᴠᴇ-𝐌ᴧɢɪᴄ** ✩°｡⋆─\n🔻 ᴄᴏᴜᴘʟᴇ𝗌   ❅ ʟᴏᴠᴇ\n🔻 ғʟᴧϻᴇs     ❅ ᴜꝛᴜᴛᴛᴜ\n─⋆｡°✩ **𝐓ʜᴇ-𝐁ꝛᴇᴧᴋᴅᴏᴡɴ** ✩°｡⋆─\n🔻 ʟᴧɢ-ғʀᴇᴇ ϻᴜ𝗌ɪᴄ\n🔻 ᴠɪᴅᴇᴏ/ᴧᴜᴅɪᴏ ᴅᴏᴡηʟᴏᴧᴅ\n🔻 𝗌ᴜᴘᴘᴏꝛᴛ ʟɪηᴋs/ᴜꝛʟ'𝗌\n🔻 𝗌ᴜᴘᴘᴏꝛᴛ ʟɪᴠᴇ-𝗌ᴛʀᴇᴧϻ\n🔻 𝗌ᴜᴘᴘᴏꝛᴛ ɪɴ𝗌ᴛᴧ ᴅᴏᴡηʟᴏᴧᴅ𝗌</blockquote>\n<blockquote>𝆺𝅥 𝐃σит тσʋᴄн мʏ || [𝐂𝖗𝖚𝖘𝖍 🦇](https://t.me/rajeshrakis) ||</blockquote>")
+AUTO_GCAST_MSG = getenv("AUTO_GCAST_MSG", "<blockquote>⋆｡°✩ **𝐋ᴇᴛƨ𝐕ɪʙᴇ𝐎ᴜᴛ** ✩°｡⋆\n[💋⟵꯭᪵〬𓂋⃝᜴͓ ⃪𝐒ㅤ͓ᷘɪㅤ⃪ᷢ𝐋ㅤ͓ᷴᴜㅤ⃪͓ᷚ𝐊 ₋ ͓ᷤᴋㅤ͢ ̌̍𝐔 🍷𓂃](https://t.me/SilukkuMusicBot)</blockquote>\n<blockquote>➽───𝐅ᴇᴧᴛᴜꝛᴇ𝗌-ɪɴ𝗌ɪᴅᴇ───❥\n🔻 ꝛᴏ𝗌ᴇ ғᴜηᴄᴛɪᴏɴ𝗌|ғᴇᴅ ❅ ꝛᴧηᴋɪɴɢ\n🔻 ᴡʜɪ𝗌ᴘᴇꝛ ϻ𝗌ɢ ❅ 𝗌ᴧηɢ-ϻᴧᴛᴧ\n🔻 ϻᴇɴᴛɪᴏη ❅ ᴄʜᴧᴛ|ꝛᴇᴧᴄᴛ\n─⋆｡°✩ **𝐋ᴏᴠᴇ-𝐌ᴧɢɪᴄ** ✩°｡⋆─\n🔻 ᴄᴏᴜᴘʟᴇ𝗌   ❅ ʟᴏᴠᴇ\n🔻 ғʟᴧϻᴇs     ❅ ᴜꝛᴜᴛᴛᴜ\n─⋆｡°✩ **𝐓ʜᴇ-𝐁ꝛᴇᴧᴋᴅᴏᴡɴ** ✩°｡⋆─\n🔻 ʟᴧɢ-ғʀᴇᴇ ϻᴜ𝗌ɪᴄ\n🔻 ᴠɪᴅᴇᴏ/ᴧᴜᴅɪᴏ ᴅᴏᴡηʟᴏᴧᴅ\n🔻 𝗌ᴜᴘᴘᴏꝛᴛ ʟɪηᴋs/ᴜꝛʟ'𝗌\n🔻 𝗌ᴜᴘᴘᴏꝛᴛ ʟɪᴠᴇ-𝗌ᴛʀᴇᴧϻ\n🔻 𝗌ᴜᴘᴘᴏꝛᴛ ɪɴ𝗌ᴛᴧ ᴅᴏᴡηʟᴏᴧᴅ𝗌</blockquote>\n<blockquote>𝆺𝅥 𝐃σит тσʋᴄн мʏ || [𝐂𝖗𝖚𝖘𝖍 🦇](https://t.me/rajeshrakis) ||</blockquote>")
 
 # Get this credentials from https://developer.spotify.com/dashboard
 SPOTIFY_CLIENT_ID = getenv("SPOTIFY_CLIENT_ID", "19609edb1b9f4ed7be0c8c1342039362")
@@ -93,7 +93,7 @@ HEROKU_API_KEY = getenv("HEROKU_API_KEY", "HRKU-fc1b7aea-b37a-4015-9877-8c3967ee
 
 UPSTREAM_REPO = getenv(
     "UPSTREAM_REPO",
-    "https://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@github.com/GhosttBatt/Cute-HB",
+    "https://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@github.com/GhosttBatt/Cute-Silukku",
 )
 UPSTREAM_BRANCH = getenv("UPSTREAM_BRANCH", "master")
 GIT_TOKEN = getenv(
@@ -102,7 +102,7 @@ GIT_TOKEN = getenv(
 
 
 # Get your pyrogram v2 session from @VIP_STRING_ROBOT on Telegram
-STRING1 = getenv("STRING_SESSION2", "BQGJMTYAodG_ZWpWsmNcDbr9azN3eEUN6loXCuMs4zAuhrCRlbZfrIILuT-689wwKju3BtacJ6KtqWx6ujyVlQidiiEh_uLbn6-ig4_XTAtHUGqa3oExpMGY-In042JciVmGabeIYictD9uk1xyyngVtgSkDtiDN1jP5ju6-gmmZnKxn44wdxABRWH-XARyEmKCktfTxyhYBWnKejmRkqohiRC6vbP0tZyWgReEGk49pwQLexbvtDUKpEumDDHJr-nVGDiCD1yFu_46w0_dYSmpCrn8f0e1wABNlIbr0HoYBfdOGXZ2x2f-wEUQQUmMGME0Uy4jPgPkMNps44CP61e8yndNo0gAAAAHSHPeVAA")
+STRING1 = getenv("STRING_SESSION2", "BQHEb5wAVvGQYKkEjCVzqk8rZKpBZn4GihuNmSKMgyXTQTB8I4IgpOSMy_2710TJfyHMgSZMd93lBp2AsAK-s0CQ8WaPHpzKJ_VnxjrYTPQ_QwW5Yg_q6peXSvBK7jqdnNYDpR1fmbaXz-P_Sr4CKbY4Wmdds8ndLZ4up3zxFSEFUOEetIvSklRRe1mihu3Ef9mxLylT77zjVFEg4kUj2-CLBup31CB3pdmz3hQpMNY1pHjKJcn_2v02QT1QztOiaaazN4HhF4iyTCmKpVU1qX2Xzwgx6tanHWY0kJ0hooyc1f25KD5qXTyRg6qmN0dXwiVDppBjfdA7wRFhRiHOurjM49kbtgAAAAH2CAwvAA")
 STRING2 = getenv("STRING_SESSION2", None)
 STRING3 = getenv("STRING_SESSION3", None)
 STRING4 = getenv("STRING_SESSION4", None)
@@ -121,7 +121,7 @@ YUMI_PICS = [
 ]
 
 START_IMG_URL = getenv(
-    "START_IMG_URL", "https://files.catbox.moe/qyz1ar.jpg"
+    "START_IMG_URL", "https://files.catbox.moe/bybhxb.jpg"
 )
 PING_IMG_URL = getenv(
     "PING_IMG_URL", "https://graph.org/file/ffdb1be822436121cf5fd.png"
