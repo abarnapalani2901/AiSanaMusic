@@ -40,7 +40,7 @@ SUDOERS = getenv("SUDOERS", "1281282633 8399160924 6773435708").split()
 
 SUPPORT_CHANNEL = getenv("SUPPORT_CHANNEL", "https://t.me/HeartBeat_Offi")
 SUPPORT_CHAT = getenv("SUPPORT_CHAT", "https://t.me/HeartBeat_Fam")
-MUST_JOIN = getenv("MUST_JOIN", "Time_To_Lead")
+MUST_JOIN = getenv("MUST_JOIN", "HeartBeat_Fam")
 
 #Ranking
 AUTOPOST_TIME_HOUR = 21
@@ -93,7 +93,7 @@ HEROKU_API_KEY = getenv("HEROKU_API_KEY", "HRKU-fc1b7aea-b37a-4015-9877-8c3967ee
 
 UPSTREAM_REPO = getenv(
     "UPSTREAM_REPO",
-    "https://github.com/hrtbeat359/HB-Cute",
+    "https://github.com/GhosttBatt/HB-Cute",
 )
 UPSTREAM_BRANCH = getenv("UPSTREAM_BRANCH", "master")
 GIT_TOKEN = getenv(
@@ -102,7 +102,7 @@ GIT_TOKEN = getenv(
 
 
 # Get your pyrogram v2 session from @VIP_STRING_ROBOT on Telegram
-STRING1 = getenv("STRING_SESSION2", "BQHEb5wAVvGQYKkEjCVzqk8rZKpBZn4GihuNmSKMgyXTQTB8I4IgpOSMy_2710TJfyHMgSZMd93lBp2AsAK-s0CQ8WaPHpzKJ_VnxjrYTPQ_QwW5Yg_q6peXSvBK7jqdnNYDpR1fmbaXz-P_Sr4CKbY4Wmdds8ndLZ4up3zxFSEFUOEetIvSklRRe1mihu3Ef9mxLylT77zjVFEg4kUj2-CLBup31CB3pdmz3hQpMNY1pHjKJcn_2v02QT1QztOiaaazN4HhF4iyTCmKpVU1qX2Xzwgx6tanHWY0kJ0hooyc1f25KD5qXTyRg6qmN0dXwiVDppBjfdA7wRFhRiHOurjM49kbtgAAAAH2CAwvAA")
+STRING1 = getenv("STRING_SESSION2", "BQHEb5wACBKg_3_Rmk3Wlx48rb_-h9tODFzHehqD5HiYPagZ0OA4xNx_wowFcrtlZ9yIXpsVTNIsnJN1LlHcDcnymZiWNSTrHeA7FGVOKTkn-Aaq2ts1oYXzZvf2SfzDLd_8w9AQskX8OJ1aIzgO-tlCupA8AHg1a_os1esO072kaasdYUDgjsdmpbJlSYouyXW1Mb4e6h-c4lja6lfiAgC0J4yfU6sd7og2qrcFMRaajyLIXSQucpXLF6Fo6QbkBB9DjXys9C2YfZOisjZ5VgNkKaLSWicDyzl7TCSRP9oHgS-KJnJ0uhkP9zMnnvpIP0SabI0kAshBGZIH2wGHI72mK9Y7ngAAAAH2CAwvAA")
 STRING2 = getenv("STRING_SESSION2", None)
 STRING3 = getenv("STRING_SESSION3", None)
 STRING4 = getenv("STRING_SESSION4", None)
@@ -121,7 +121,7 @@ YUMI_PICS = [
 ]
 
 START_IMG_URL = getenv(
-    "START_IMG_URL", "https://files.catbox.moe/qyz1ar.jpg"
+    "START_IMG_URL", "https://telegra.ph/file/e5aaa494015bccbe1ec85.jpg"
 )
 PING_IMG_URL = getenv(
     "PING_IMG_URL", "https://graph.org/file/ffdb1be822436121cf5fd.png"
