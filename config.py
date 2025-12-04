@@ -9,7 +9,7 @@ load_dotenv()
 # Get this value from my.telegram.org/apps
 API_ID = int(getenv("API_ID","8045459"))
 API_HASH = getenv("API_HASH", "e6d1f09120e17a4372fe022dde88511b")
-BOT_TOKEN = getenv("BOT_TOKEN", "7068876137:AAHxyBy6P_UBAL-5eS9S6YBIGAlSyWJ03HA")
+BOT_TOKEN = getenv("BOT_TOKEN", "2096983652:AAG_4MVAdZ8akrRmvIl7228CKrRFOYogLzY")
 
 # Get your mongo url from cloud.mongodb.com
 OWNER_USERNAME = getenv("OWNER_USERNAME","rajeshrakis")
