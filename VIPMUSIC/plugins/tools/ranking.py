@@ -39,8 +39,11 @@ TZ = ZoneInfo("Asia/Kolkata")
 # DB SETUP (motor async)
 # -------------------------------------------------------------------
 mongo = AsyncIOMotorClient(MONGO_DB_URI)
-_default_db = mongo.get_default_database()
-db = _default_db if _default_db is not None else mongo["ghosttlead"]
+
+try:
+    db = mongo.get_default_database()
+except:
+    db = mongo["heartbeatlead"]   # fallback db name
 ranking_db = db["ranking"]
 autopost_db = db["ranking_autoposts"]  # stores chats where auto-post is enabled
 
