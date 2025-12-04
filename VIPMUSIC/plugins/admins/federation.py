@@ -5,6 +5,7 @@ from pyrogram import filters
 from pyrogram.enums import ChatMemberStatus, ChatType, ParseMode
 from pyrogram.errors import FloodWait, PeerIdInvalid
 from pyrogram.types import InlineKeyboardButton, InlineKeyboardMarkup
+from VIPMUSIC.mongo import dbname # db name added
 
 from VIPMUSIC.mongo.feds_db import (
     get_fed_info,
@@ -81,7 +82,7 @@ async def new_fed(client, message):
     if not fed_name:
         return await message.reply_text("Please write down the name of the federation")
     fed_id = str(uuid.uuid4())
-    x = await client.db["federation"].update_one(  # if your project uses db alias on client
+    x = await dbname["federation"].update_one( #x = await client.db["federation"].update_one(  # if your project uses db alias on client
         {"fed_id": fed_id},
         {
             "$set": {
