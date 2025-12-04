@@ -9,7 +9,7 @@ load_dotenv()
 # Get this value from my.telegram.org/apps
 API_ID = int(getenv("API_ID","8045459"))
 API_HASH = getenv("API_HASH", "e6d1f09120e17a4372fe022dde88511b")
-BOT_TOKEN = getenv("BOT_TOKEN", "8244250546:AAGv_n9GxRhZuGvzgVhEr7G_XfL7tqL8IIE") #8204653134:AAFLhxAIWEV937aucjUQP2T32W6DZsy8-QE")
+BOT_TOKEN = getenv("BOT_TOKEN", "7068876137:AAHxyBy6P_UBAL-5eS9S6YBIGAlSyWJ03HA")
 
 # Get your mongo url from cloud.mongodb.com
 OWNER_USERNAME = getenv("OWNER_USERNAME","rajeshrakis")
@@ -93,7 +93,7 @@ HEROKU_API_KEY = getenv("HEROKU_API_KEY", "HRKU-fc1b7aea-b37a-4015-9877-8c3967ee
 
 UPSTREAM_REPO = getenv(
     "UPSTREAM_REPO",
-    "https://github.com/GhosttBatt/HB-Cute",
+    "https://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@github.com/GhosttBatt/Cute-HB",
 )
 UPSTREAM_BRANCH = getenv("UPSTREAM_BRANCH", "master")
 GIT_TOKEN = getenv(
@@ -102,7 +102,7 @@ GIT_TOKEN = getenv(
 
 
 # Get your pyrogram v2 session from @VIP_STRING_ROBOT on Telegram
-STRING1 = getenv("STRING_SESSION2", "BQHEb5wACBKg_3_Rmk3Wlx48rb_-h9tODFzHehqD5HiYPagZ0OA4xNx_wowFcrtlZ9yIXpsVTNIsnJN1LlHcDcnymZiWNSTrHeA7FGVOKTkn-Aaq2ts1oYXzZvf2SfzDLd_8w9AQskX8OJ1aIzgO-tlCupA8AHg1a_os1esO072kaasdYUDgjsdmpbJlSYouyXW1Mb4e6h-c4lja6lfiAgC0J4yfU6sd7og2qrcFMRaajyLIXSQucpXLF6Fo6QbkBB9DjXys9C2YfZOisjZ5VgNkKaLSWicDyzl7TCSRP9oHgS-KJnJ0uhkP9zMnnvpIP0SabI0kAshBGZIH2wGHI72mK9Y7ngAAAAH2CAwvAA")
+STRING1 = getenv("STRING_SESSION2", "BQGJMTYAodG_ZWpWsmNcDbr9azN3eEUN6loXCuMs4zAuhrCRlbZfrIILuT-689wwKju3BtacJ6KtqWx6ujyVlQidiiEh_uLbn6-ig4_XTAtHUGqa3oExpMGY-In042JciVmGabeIYictD9uk1xyyngVtgSkDtiDN1jP5ju6-gmmZnKxn44wdxABRWH-XARyEmKCktfTxyhYBWnKejmRkqohiRC6vbP0tZyWgReEGk49pwQLexbvtDUKpEumDDHJr-nVGDiCD1yFu_46w0_dYSmpCrn8f0e1wABNlIbr0HoYBfdOGXZ2x2f-wEUQQUmMGME0Uy4jPgPkMNps44CP61e8yndNo0gAAAAHSHPeVAA")
 STRING2 = getenv("STRING_SESSION2", None)
 STRING3 = getenv("STRING_SESSION3", None)
 STRING4 = getenv("STRING_SESSION4", None)
