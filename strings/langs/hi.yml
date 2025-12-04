@@ -99,8 +99,8 @@ start_4 : "<blockquote>🎄 <b>❖ sᴜᴘᴇʀɢʀᴏᴜᴘ ɴᴇᴇᴅᴇᴅ</
 start_5 : "<blockquote><b>❖ ʙʟᴀᴄᴋʟɪsᴛᴇᴅ ᴄʜᴀᴛ ↜</b></blockquote>\n\n<blockquote>❖ ᴛʜɪs ᴄʜᴀᴛ ɪs ʙʟᴀᴄᴋʟɪsᴛᴇᴅ ᴏɴ {0} ᴅᴀᴛᴀʙᴀsᴇ.</blockquote>\n<blockquote>ʀᴇǫᴜᴇsᴛ ᴀ <a href={1}>sᴜᴅᴏ ᴜsᴇʀ</a> ᴛᴏ ᴜɴʙʟᴀᴄᴋʟɪsᴛ ʏᴏᴜʀ ᴄʜᴀᴛ ᴏʀ ᴠɪsɪᴛ <a href={2}>sᴜᴘᴘᴏʀᴛ ᴄʜᴀᴛ.</a></blockquote>"
 start_6 : "<blockquote>侖 <b>ᴛʀᴀᴄᴋ ɪɴғᴏʀᴍᴀᴛɪᴏɴ</b> 侖</blockquote>\n\n<blockquote>侖 <b>ᴛɪᴛʟᴇ :</b> {0}\n\n侖 <b>ᴅᴜʀᴀᴛɪᴏɴ :</b> {1} ᴍɪɴᴜᴛᴇs\n侖 <b>ᴠɪᴇᴡs :</b> <code>{2}</code>\n侖 <b>ᴩᴜʙʟɪsʜᴇᴅ ᴏɴ :</b> {3}\n侖 <b>ᴄʜᴀɴɴᴇʟ :</b> <a href={4}>{5}</a></blockquote>\n\n<blockquote><u><b>☉ sᴇᴀʀᴄʜ ᴩᴏᴡᴇʀᴇᴅ ʙʏ {6}</b></u></blockquote>"
 
-help_1 : "<blockquote>𝙈𝒂𝒌𝒆 𝙔𝒐𝒖𝒓 𝙊𝒘𝒏 𝘽𝒐𝒕</blockquote>\n/cᴏɴᴛᴀᴄᴛ  (@GhosttBatt)\n➽─────────────────❥\n𝐂ʜᴇᴄᴋ 𝐖ɪᴛʜ - @BotHostingRobot"
 help_1 : "<blockquote>⋆｡°✩ **𝐇ᴇʟᴘ-𝐌ᴇɴᴜ** ✩°｡⋆\n⍟─────────────────✪\n⋆｡°✩ **𝐒ϻᴧꝛᴛ-𝐒ᴛᴜғғ** ✩°｡⋆\n🔻 ᴡᴇʟᴄᴏϻᴇ-ᴄᴧꝛᴅ\n🔻 ᴠᴄ-ɪηᴠɪᴛᴇ ᴄᴧꝛᴅ\n🔻 𝗌ᴛʏʟɪ𝗌ʜ ᴛᴧɢ𝗌</blockquote>\n<blockquote>ᴧʟʟ ᴄᴏϻᴍᴧɴᴅs ᴄᴧη ʙᴇ ᴜsᴇᴅ ᴡɪᴛʜ : /</blockquote>\n<blockquote>⋆｡°✩ **𝐇ʙ-𝐅ᴀᴍ** ✩°｡⋆\n❅ | [ʜᴇᴧꝛᴛʙᴇᴧᴛ ᴏғғɪᴄɪᴧʟ](https://t.me/HeartBeat_Offi)\n❅ | [ʜᴇᴧꝛᴛʙᴇᴧᴛ ᴄʜᴧᴛ](https://t.me/HeartBeat_Fam)\n⍟─────────────────✪\n⋆｡°✩ **𝐅ᴏᴜɴᴅᴇʀ** ✩°｡⋆\n❅ | || [ɢʜᴏsᴛ-ʙᴧᴛ](https://t.me/GhosttBatt)||</blockquote>"
+help_2 : "<blockquote>𝙈𝒂𝒌𝒆 𝙔𝒐𝒖𝒓 𝙊𝒘𝒏 𝘽𝒐𝒕</blockquote>\n/cᴏɴᴛᴀᴄᴛ  (@GhosttBatt)\n➽─────────────────❥\n𝐂ʜᴇᴄᴋ 𝐖ɪᴛʜ - @BotHostingRobot"
 
 lang_1 : "<blockquote>❖ ᴘʟᴇᴀsᴇ ᴄʜᴏᴏsᴇ ᴛʜᴇ ʟᴀɴɢᴜᴀɢᴇ ᴡʜɪᴄʜ ʏᴏᴜ ᴡᴀɴɴᴀ sᴇᴛ ᴀs ᴛʜɪs ɢʀᴏᴜᴘ's ᴅᴇғᴀᴜʟᴛ ʟᴀɴɢᴜᴀɢᴇ :</blockquote>"
 lang_2 : "<blockquote>❖ ʟᴀɴɢᴜᴀɢᴇ ᴄʜᴀɴɢᴇᴅ sᴜᴄᴄᴇssғᴜʟʟʏ.</blockquote>"
