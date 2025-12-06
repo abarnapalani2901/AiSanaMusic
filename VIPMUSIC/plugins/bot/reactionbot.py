@@ -447,12 +447,15 @@ async def react_on_mentions(client, message: Message):
             except Exception:
                 continue
 
-        # React for explicit mentions if matched
+        # React for explicit mentions if matched and # Skip if reactions are disabled for this chat
+        if not is_reaction_enabled_for_chat(chat_id):
+            return
+
         for uname in mentioned_usernames:
             if uname in custom_mentions:
-                # For mention triggers we react regardless of chat/global auto-react flag
                 try:
                     return await message.react(next_emoji(chat_id))
+
                 except Exception:
                     try:
                         return await message.react("❤️")
