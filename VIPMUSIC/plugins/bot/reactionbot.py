@@ -488,36 +488,38 @@ async def react_on_mentions(client, message: Message):
 
 
 # ---------------- GLOBAL AUTO-REACTION ----------------
-# replaced ~filters.command() (which requires args) with a prefix-regex exclusion,
-# consistent with react_on_mentions, to avoid the TypeError.
 @app.on_message(
     (filters.text | filters.caption)
     & ~filters.regex(r"^[\\/!.#].*")
+    & ~filters.user("self")  # optional: avoid reacting to own messages
 )
 async def auto_react(client, message: Message):
-    # Auto reactions follow the REACTION_ENABLED flag and per-chat overrides.
     try:
         raw = message.text or message.caption or ""
         if not raw:
             return
 
-        # Ignore bot commands and common prefixes
+        # ignore commands
         if raw.strip().startswith(("/", "!", "$", ".", "#")):
             return
 
         chat_id = message.chat.id
 
-        # decide if reactions are enabled for this chat
+        # ignore if chat disabled
         if not is_reaction_enabled_for_chat(chat_id):
             return
 
+        # ignore messages that mention triggers (react_on_mentions will handle)
+        words = message_words(raw.lower())
+        for trig in custom_mentions:
+            if trig.startswith("id:"):
+                continue
+            if trig in words or trig in raw.lower():
+                return   # do NOT auto-react here
+
+        # apply auto reaction
         emoji = next_emoji(chat_id)
-        try:
-            await message.react(emoji)
-        except Exception:
-            try:
-                await message.react("❤️")
-            except Exception:
-                pass
+        await message.react(emoji)
+
     except Exception as e:
         print(f"[auto_react] error: {e}")
