@@ -725,6 +725,30 @@ async def download_instagram_video(link: str) -> str:
         logger.error(f"❌ Instagram video failed: {e}")
         return None
 
+# ========== M3U8 HELPERS ==========
+def is_m3u8(url: str) -> bool:
+    if not url:
+        return False
+    return (
+        url.endswith(".m3u8")
+        or ".m3u8?" in url
+        or "m3u8" in url.lower()
+    )
+
+async def handle_m3u8_stream(link: str):
+    """
+    Direct HLS stream handler (no download).
+    Returns stream url + metadata.
+    """
+    return {
+        "title": "Live Stream",
+        "link": link,
+        "duration": "00:00",   # live
+        "is_live": True,
+    }
+
+# M3U8 Helpers End-----
+
 
 # ========== YOUTUBE API CLASS (unchanged logic except calling cookie helpers where needed) ==========
 class YouTubeAPI:
@@ -912,6 +936,12 @@ class YouTubeAPI:
             link = self.base + link
 
         try:
+            # ---------- M3U8 DIRECT STREAM ----------
+            if is_m3u8(link):
+            # No downloading, direct play
+            stream = await handle_m3u8_stream(link)
+            return stream["link"], True  # M3U8 Direct Stream end
+            
             if is_instagram_url(link): # ---------- start INSTAGRAM (SEPARATE HANDLER) ----------
                 if songvideo:  # 🎥 Instagram VIDEO play
                     file = await download_instagram_video(link)
