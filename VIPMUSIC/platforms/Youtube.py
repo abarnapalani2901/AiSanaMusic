@@ -99,17 +99,17 @@ def get_base_ytdlp_opts(cookie_file: str):
         "concurrent_fragment_downloads": 3,
 
         # Aria2c
-        "external_downloader": "aria2c",
-        "external_downloader_args": [
-            "-x", "16",
-            "-s", "16",
-            "-k", "1M",
-            "--check-certificate=false",
-            "--file-allocation=none",
-            "--disk-cache=128M",
-            "--max-tries=10",
-            "--continue=true",
-        ],
+        #"external_downloader": "aria2c",
+        #"external_downloader_args": [
+            #"-x", "16",
+            #"-s", "16",
+            #"-k", "1M",
+            #"--check-certificate=false",
+            #"--file-allocation=none",
+            #"--disk-cache=128M",
+            #"--max-tries=10",
+            #"--continue=true",
+        #],
 }
             
 # ========== COOKIE FILE HELPERS ==========
