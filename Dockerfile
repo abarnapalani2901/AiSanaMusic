@@ -3,7 +3,7 @@ FROM nikolaik/python-nodejs:python3.10-nodejs20
 # System deps
 RUN apt-get update && apt-get install -y --no-install-recommends \
     ffmpeg \
-    aria2 \
+    #aria2 \ #banned by railway
     wget \
     curl \
     unzip \
