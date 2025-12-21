@@ -790,7 +790,9 @@ class YouTubeAPI:
         self.regex = r"(?:youtube\.com|youtu\.be)"
         self.status = "https://www.youtube.com/oembed?url="
         self.listbase = "https://youtube.com/playlist?list="
-        self.reg = re.compile(r"\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])")
+        self.reg = re.compile(
+            r"\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])"
+        )
 
     async def exists(self, link: str, videoid: Union[bool, str] = None):
         if videoid:
@@ -801,12 +803,16 @@ class YouTubeAPI:
         messages = [message_1]
         if message_1.reply_to_message:
             messages.append(message_1.reply_to_message)
+
         for message in messages:
             if message.entities:
                 for entity in message.entities:
                     if entity.type == MessageEntityType.URL:
                         text = message.text or message.caption
-                        return text[entity.offset: entity.offset + entity.length]
+                        return text[
+                            entity.offset : entity.offset + entity.length
+                        ]
+
             elif message.caption_entities:
                 for entity in message.caption_entities:
                     if entity.type == MessageEntityType.TEXT_LINK:
@@ -816,22 +822,29 @@ class YouTubeAPI:
     async def details(self, link: str, videoid: Union[bool, str] = None):
         if videoid:
             link = self.base + link
+
         if "&" in link:
             link = link.split("&")[0]
+
         results = VideosSearch(link, limit=1)
         for result in (await results.next())["result"]:
             title = result["title"]
             duration_min = result["duration"]
             thumbnail = result["thumbnails"][0]["url"].split("?")[0]
             vidid = result["id"]
-            duration_sec = int(time_to_seconds(duration_min)) if duration_min else 0
+            duration_sec = (
+                int(time_to_seconds(duration_min)) if duration_min else 0
+            )
+
         return title, duration_min, duration_sec, thumbnail, vidid
 
     async def title(self, link: str, videoid: Union[bool, str] = None):
         if videoid:
             link = self.base + link
+
         if "&" in link:
             link = link.split("&")[0]
+
         results = VideosSearch(link, limit=1)
         for result in (await results.next())["result"]:
             return result["title"]
@@ -839,8 +852,10 @@ class YouTubeAPI:
     async def duration(self, link: str, videoid: Union[bool, str] = None):
         if videoid:
             link = self.base + link
+
         if "&" in link:
             link = link.split("&")[0]
+
         results = VideosSearch(link, limit=1)
         for result in (await results.next())["result"]:
             return result["duration"]
@@ -848,56 +863,65 @@ class YouTubeAPI:
     async def thumbnail(self, link: str, videoid: Union[bool, str] = None):
         if videoid:
             link = self.base + link
+
         if "&" in link:
             link = link.split("&")[0]
+
         results = VideosSearch(link, limit=1)
         for result in (await results.next())["result"]:
             return result["thumbnails"][0]["url"].split("?")[0]
 
     async def video(self, link: str, videoid: Union[bool, str] = None):
-    if videoid:
-        link = self.base + link
-    if "&" in link:
-        link = link.split("&")[0]
+        if videoid:
+            link = self.base + link
 
-    cookie_file = cookie_txt_file()
-    if not cookie_file:
+        if "&" in link:
+            link = link.split("&")[0]
+
+        cookie_file = cookie_txt_file()
+        if not cookie_file:
+            return 0, None
+
+        proxy = choose_random_proxy(YTDLP_PROXY_POOL)
+
+        ydl_opts = {
+            "quiet": True,
+            "cookiefile": cookie_file,
+            "nocheckcertificate": True,
+        }
+
+        if proxy:
+            ydl_opts["proxy"] = proxy
+
+        try:
+            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                info = ydl.extract_info(link, download=False)
+
+                # 🔴 YOUTUBE LIVE DETECT
+                if is_youtube_live(info):
+                    hls = info.get("hls_manifest_url")
+                    if not hls:
+                        for f in info.get("formats", []):
+                            if f.get("protocol") in (
+                                "m3u8",
+                                "m3u8_native",
+                            ):
+                                hls = f.get("url")
+                                break
+
+                    if hls:
+                        return 1, hls  # ✅ LIVE PASSTHROUGH
+
+                # 🟢 NORMAL VIDEO (DOWNLOAD)
+                downloaded_file = await download_video(link)
+                if downloaded_file:
+                    return 1, downloaded_file
+
+        except Exception as e:
+            logger.error(f"YouTube video error: {e}")
+
         return 0, None
 
-    proxy = choose_random_proxy(YTDLP_PROXY_POOL)
-
-    ydl_opts = {
-        "quiet": True,
-        "cookiefile": cookie_file,
-        "nocheckcertificate": True,
-    }
-    if proxy:
-        ydl_opts["proxy"] = proxy
-
-    try:
-        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-            info = ydl.extract_info(link, download=False)
-
-            # 🔴 YOUTUBE LIVE DETECT
-            if is_youtube_live(info):
-                hls = info.get("hls_manifest_url")
-                if not hls:
-                    for f in info.get("formats", []):
-                        if f.get("protocol") in ("m3u8", "m3u8_native"):
-                            hls = f.get("url")
-                            break
-                if hls:
-                    return 1, hls # ✅ LIVE PASSTHROUGH
-
-            # 🟢 NORMAL VIDEO (DOWNLOAD)
-            downloaded_file = await download_video(link)
-            if downloaded_file:
-                return 1, downloaded_file
-    
-    except Exception as e:
-        logger.error(f"YouTube video error: {e}")
-
-    return 0, None
     
 async def playlist(self, link, limit, user_id, videoid: Union[bool, str] = None):
         if videoid:
