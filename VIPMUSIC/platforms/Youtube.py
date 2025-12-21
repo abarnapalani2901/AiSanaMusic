@@ -41,9 +41,6 @@ YT_PASSWORD = os.getenv("YT_PASSWORD", os.getenv("YT_PASSWORD", "143@Frnds"))
 INSTA_USERNAME = os.getenv("INSTA_USERNAME")
 INSTA_PASSWORD = os.getenv("INSTA_PASSWORD")
 
-INSTAGRAM_COOKIE_PATH = os.path.join(COOKIES_DIR, "instagram.txt")
-
-
 
 # Toggle auto-refresh cookies (deploy-friendly option). Set to "true" (case-insensitive) to enable.
 AUTO_REFRESH_COOKIES = os.getenv("AUTO_REFRESH_COOKIES", "false").lower() in ("1", "true", "yes")
@@ -56,6 +53,7 @@ PLAYWRIGHT_PROXIES = os.getenv("PLAYWRIGHT_PROXIES", "")  # e.g. same format
 # Cookie directory
 COOKIES_DIR = os.path.join(os.getcwd(), "cookies")
 os.makedirs(COOKIES_DIR, exist_ok=True)
+INSTAGRAM_COOKIE_PATH = os.path.join(COOKIES_DIR, "instagram.txt")
 
 # Logger helper
 def get_logger(name: str):
