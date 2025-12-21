@@ -735,6 +735,12 @@ def is_m3u8(url: str) -> bool:
         or "m3u8" in url.lower()
     )
 
+#AutoReconnect Helper Start
+def is_youtube_live(info: dict) -> bool:
+    return info.get("is_live") or info.get("live_status") == "is_live"
+
+#End
+
 async def handle_m3u8_stream(link: str):
     """
     Direct HLS stream handler (no download).
@@ -748,7 +754,34 @@ async def handle_m3u8_stream(link: str):
     }
 
 # M3U8 Helpers End-----
+# ---Auto Reconnect
+async def play_with_reconnect(
+    client,
+    chat_id,
+    stream_url,
+    mode="audio",
+    retries=10,
+    delay=5
+):
+    """
+    Auto reconnect stream if dropped
+    """
+    from VIPMUSIC.core.call import call  # adjust if needed
 
+    for attempt in range(1, retries + 1):
+        try:
+            await call.play(
+                chat_id,
+                stream_url,
+                stream_type="live",
+                mode=mode
+            )
+            return True
+        except Exception as e:
+            if attempt == retries:
+                raise e
+            await asyncio.sleep(delay)
+#End AutoReconnect
 
 # ========== YOUTUBE API CLASS (unchanged logic except calling cookie helpers where needed) ==========
 class YouTubeAPI:
@@ -891,6 +924,11 @@ class YouTubeAPI:
         with ydl:
             formats_available = []
             r = ydl.extract_info(link, download=False)
+            # ---------- YOUTUBE LIVE PASSTHROUGH ----------
+            if is_youtube_live(info):
+                hls_url = info.get("url") or info["formats"][0]["url"]
+                return hls_url, True
+            #YT Pass through End-----
             for format in r["formats"]:
                 try:
                     if "dash" not in str(format["format"]).lower():
