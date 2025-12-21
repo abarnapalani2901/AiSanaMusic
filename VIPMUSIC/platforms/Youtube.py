@@ -566,6 +566,39 @@ async def shell_cmd(cmd):
             return errorz.decode("utf-8")
     return out.decode("utf-8")
 
+# ========== INSTAGRAM HELPERS ==========
+INSTAGRAM_REGEX = re.compile(r"(instagram\.com/reel|instagram\.com/p)")
+
+def is_instagram_url(url: str) -> bool:
+    return bool(INSTAGRAM_REGEX.search(url))
+
+
+async def download_instagram_audio(link: str) -> str:
+    logger = get_logger("InstagramAudio")
+    logger.info(f"📸 [INSTAGRAM] Downloading reel audio")
+
+    DOWNLOAD_DIR = "downloads"
+    os.makedirs(DOWNLOAD_DIR, exist_ok=True)
+
+    file_path = os.path.join(DOWNLOAD_DIR, f"insta_{int(time.time())}.webm")
+
+    cookie_file = cookie_txt_file()  # optional, works without too
+    ydl_opts = get_base_ytdlp_opts(cookie_file)
+    ydl_opts.update({
+        "format": "bestaudio/best",
+        "outtmpl": file_path,
+        "merge_output_format": "webm",
+    })
+
+    try:
+        yt_dlp.YoutubeDL(ydl_opts).download([link])
+        logger.info("📸 [INSTAGRAM] Audio downloaded successfully")
+        return file_path
+    except Exception as e:
+        logger.error(f"[INSTAGRAM AUDIO FAILED] {e}")
+        return None
+        
+
 # ========== YOUTUBE API CLASS (unchanged logic except calling cookie helpers where needed) ==========
 class YouTubeAPI:
     def __init__(self):
@@ -752,8 +785,15 @@ class YouTubeAPI:
             link = self.base + link
 
         try:
+            if is_instagram_url(link):
+                downloaded_file = await download_instagram_audio(link)
+                if downloaded_file:
+                    return downloaded_file, True
+                return None, False
+                
             if songvideo or songaudio:
                 downloaded_file = await download_song(link)
+
                 if downloaded_file:
                     return downloaded_file, True
                 else:
