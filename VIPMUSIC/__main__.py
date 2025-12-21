@@ -10,6 +10,7 @@ from VIPMUSIC.plugins import ALL_MODULES
 from VIPMUSIC.utils.database import get_banned_users, get_gbanned
 from config import BANNED_USERS
 
+from autorestart import autorestart
 
 async def init_bot():
     if (
@@ -85,3 +86,11 @@ async def main():
 if __name__ == "__main__":
     loop = asyncio.get_event_loop()
     loop.run_until_complete(main())
+    #AutoRestart
+    log("AutoRestart system started.")
+    try:
+        autorestart()
+    except KeyboardInterrupt:
+        log("AutoRestart system stopped manually.")
+    except Exception as e:
+        log(f"Unexpected error: {e}")
