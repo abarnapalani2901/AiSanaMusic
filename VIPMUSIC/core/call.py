@@ -629,8 +629,8 @@ class Call(PyTgCalls):
                 try:
                     await self.change_stream(client, chat_id)
                     return
-                    except:
-                        pass
+                except Exception:
+                    pass
                         
             await self.change_stream(client, chat_id)
 
