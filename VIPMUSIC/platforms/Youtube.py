@@ -81,6 +81,37 @@ def choose_random_proxy(pool):
         return None
     return random.choice(pool)
 
+# ================= yt-dlp BASE OPTIONS (SPEED / STABILITY) =================
+def get_base_ytdlp_opts(cookie_file: str):
+    return {
+        "outtmpl": "downloads/%(id)s.%(ext)s",
+        "quiet": True,
+        "geo_bypass": True,
+        "nocheckcertificate": True,
+        "cookiefile": cookie_file,
+        "no_warnings": True,
+
+        # Speed Boosters
+        "source_address": "0.0.0.0",
+        "socket_timeout": 20,
+        "retries": 50,
+        "fragment_retries": 50,
+        "concurrent_fragment_downloads": 3,
+
+        # Aria2c
+        "external_downloader": "aria2c",
+        "external_downloader_args": [
+            "-x", "16",
+            "-s", "16",
+            "-k", "1M",
+            "--check-certificate=false",
+            "--file-allocation=none",
+            "--disk-cache=128M",
+            "--max-tries=10",
+            "--continue=true",
+        ],
+}
+            
 # ========== COOKIE FILE HELPERS ==========
 def cookie_txt_file():
     """
