@@ -855,19 +855,50 @@ class YouTubeAPI:
             return result["thumbnails"][0]["url"].split("?")[0]
 
     async def video(self, link: str, videoid: Union[bool, str] = None):
-        if videoid:
-            link = self.base + link
-        if "&" in link:
-            link = link.split("&")[0]
-        try:
+    if videoid:
+        link = self.base + link
+    if "&" in link:
+        link = link.split("&")[0]
+
+    cookie_file = cookie_txt_file()
+    if not cookie_file:
+        return 0, None
+
+    proxy = choose_random_proxy(YTDLP_PROXY_POOL)
+
+    ydl_opts = {
+        "quiet": True,
+        "cookiefile": cookie_file,
+        "nocheckcertificate": True,
+    }
+    if proxy:
+        ydl_opts["proxy"] = proxy
+
+    try:
+        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+            info = ydl.extract_info(link, download=False)  # ✅ HERE
+
+            # 🔴 YOUTUBE LIVE DETECT (YOUR CODE GOES HERE)
+            if is_youtube_live(info):
+                hls = info.get("hls_manifest_url")
+                if not hls:
+                    for f in info.get("formats", []):
+                        if f.get("protocol") in ("m3u8", "m3u8_native"):
+                            hls = f.get("url")
+                            break
+
+                if hls:
+                    return 1, hls   # ✅ LIVE PASSTHROUGH
+
+            # 🟢 NORMAL VIDEO (DOWNLOAD)
             downloaded_file = await download_video(link)
             if downloaded_file:
                 return 1, downloaded_file
-            else:
-                return 0, "Video API did not return a valid file."
-        except Exception as e:
-            print(f"Video API failed: {e}")
-            return 0, f"Video API failed: {e}"
+
+    except Exception as e:
+        logger.error(f"YouTube video error: {e}")
+
+    return 0, None
 
     async def playlist(self, link, limit, user_id, videoid: Union[bool, str] = None):
         if videoid:
