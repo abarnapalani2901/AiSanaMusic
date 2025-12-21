@@ -38,6 +38,17 @@ from VIPMUSIC.utils.stream.autoclear import auto_clean
 from VIPMUSIC.utils.thumbnails import get_thumb
 from strings import get_string
 
+# ========== LIVE STREAM FFMPEG OPTIONS ==========
+LIVE_FFMPEG_OPTS = (
+    "-reconnect 1 "
+    "-reconnect_streamed 1 "
+    "-reconnect_delay_max 5 "
+    "-fflags nobuffer "
+    "-flags low_delay "
+    "-strict experimental "
+    "-rw_timeout 5000000"
+)
+
 autoend = {}
 counter = {}
 
@@ -291,22 +302,31 @@ class Call(PyTgCalls):
         assistant = await group_assistant(self, chat_id)
         language = await get_lang(chat_id)
         _ = get_string(language)
+        # 🔁 Detect LIVE / HLS streams
+        is_live = False
+        if isinstance(link, str) and (
+            ".m3u8" in link
+            or "youtube.com" in link
+            or "youtu.be" in link
+        ):
+            is_live = True
+            
+        ffmpeg_args = LIVE_FFMPEG_OPTS if is_live else None
+        
         if video:
             stream = AudioVideoPiped(
                 link,
                 audio_parameters=HighQualityAudio(),
                 video_parameters=MediumQualityVideo(),
+                additional_ffmpeg_parameters=ffmpeg_args,
             )
         else:
-            stream = (
-                AudioVideoPiped(
-                    link,
-                    audio_parameters=HighQualityAudio(),
-                    video_parameters=MediumQualityVideo(),
-                )
-                if video
-                else AudioPiped(link, audio_parameters=HighQualityAudio())
+            stream = AudioPiped(
+                link,
+                audio_parameters=HighQualityAudio(),
+                additional_ffmpeg_parameters=ffmpeg_args,
             )
+
         try:
             await assistant.join_group_call(
                 chat_id,
@@ -373,16 +393,21 @@ class Call(PyTgCalls):
                         original_chat_id,
                         text=_["call_6"],
                     )
+                
+                ffmpeg_args = LIVE_FFMPEG_OPTS
+                
                 if video:
                     stream = AudioVideoPiped(
                         link,
                         audio_parameters=HighQualityAudio(),
                         video_parameters=MediumQualityVideo(),
+                        additional_ffmpeg_parameters=ffmpeg_args,
                     )
                 else:
                     stream = AudioPiped(
                         link,
                         audio_parameters=HighQualityAudio(),
+                        additional_ffmpeg_parameters=ffmpeg_args,
                     )
                 try:
                     await client.change_stream(chat_id, stream)
@@ -594,8 +619,20 @@ class Call(PyTgCalls):
         @self.five.on_stream_end()
         async def stream_end_handler1(client, update: Update):
             if not isinstance(update, StreamAudioEnded):
-                return
-            await self.change_stream(client, update.chat_id)
+    return
+
+chat_id = update.chat_id
+check = db.get(chat_id)
+
+# 🔁 Auto-reconnect for live streams
+if check and check[0]["file"].startswith("live_"):
+    try:
+        await self.change_stream(client, chat_id)
+        return
+    except:
+        pass
+
+await self.change_stream(client, chat_id)
 
 
 VIP = Call()
