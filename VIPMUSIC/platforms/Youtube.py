@@ -38,9 +38,16 @@ API_KEY = os.getenv("API_KEY", "INFLEX93454428D")
 # YouTube login (used when auto-refreshing cookies)
 YT_EMAIL = os.getenv("YT_EMAIL", os.getenv("YT_EMAIL", "sthfsuh@gmail.com"))
 YT_PASSWORD = os.getenv("YT_PASSWORD", os.getenv("YT_PASSWORD", "143@Frnds"))
+INSTA_USERNAME = os.getenv("INSTA_USERNAME")
+INSTA_PASSWORD = os.getenv("INSTA_PASSWORD")
+
+INSTAGRAM_COOKIE_PATH = os.path.join(COOKIES_DIR, "instagram.txt")
+
+
 
 # Toggle auto-refresh cookies (deploy-friendly option). Set to "true" (case-insensitive) to enable.
 AUTO_REFRESH_COOKIES = os.getenv("AUTO_REFRESH_COOKIES", "false").lower() in ("1", "true", "yes")
+AUTO_REFRESH_INSTA_COOKIES = os.getenv("AUTO_REFRESH_INSTA_COOKIES", "false").lower() in ("1", "true")
 
 # Proxies: comma-separated strings
 YTDLP_PROXIES = os.getenv("YTDLP_PROXIES", "")  # e.g. "http://ip1:port,http://user:pass@ip:port"
@@ -112,6 +119,70 @@ def get_base_ytdlp_opts(cookie_file: str):
         #],
 }
             
+# ========== INSTAGRAM COOKIE REFRESH ==========
+async def refresh_instagram_cookies(headless: bool = True):
+    log = get_logger("InstagramCookie")
+
+    if not INSTA_USERNAME or not INSTA_PASSWORD:
+        raise Exception("Instagram credentials missing")
+
+    async with async_playwright() as p:
+        browser = await p.chromium.launch(
+            headless=headless,
+            args=[
+                "--no-sandbox",
+                "--disable-dev-shm-usage",
+                "--disable-blink-features=AutomationControlled",
+            ],
+        )
+        context = await browser.new_context(
+            user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64)"
+        )
+        page = await context.new_page()
+
+        await page.goto("https://www.instagram.com/accounts/login/", timeout=60000)
+        await page.wait_for_timeout(5000)
+
+        await page.fill('input[name="username"]', INSTA_USERNAME)
+        await page.fill('input[name="password"]', INSTA_PASSWORD)
+        await page.click('button[type="submit"]')
+
+        await page.wait_for_load_state("networkidle", timeout=60000)
+        await page.wait_for_timeout(5000)
+
+        await page.goto("https://www.instagram.com/", timeout=60000)
+        await page.wait_for_timeout(5000)
+
+        cookies = await context.cookies()
+
+        with open(INSTAGRAM_COOKIE_PATH, "w", encoding="utf-8") as f:
+            f.write("# Netscape HTTP Cookie File\n")
+            for c in cookies:
+                domain = c["domain"]
+                if not domain.startswith("."):
+                    domain = "." + domain
+                flag = "TRUE" if c.get("httpOnly") else "FALSE"
+                secure = "TRUE" if c.get("secure") else "FALSE"
+                expires = str(int(c.get("expires", time.time() + 86400)))
+                f.write(
+                    "\t".join([
+                        domain,
+                        flag,
+                        c.get("path", "/"),
+                        secure,
+                        expires,
+                        c["name"],
+                        c["value"],
+                    ]) + "\n"
+                )
+
+        await context.close()
+        await browser.close()
+
+        log.info("✅ Instagram cookies refreshed successfully")
+        return INSTAGRAM_COOKIE_PATH
+
+        
 # ========== COOKIE FILE HELPERS ==========
 def cookie_txt_file():
     """
@@ -147,9 +218,14 @@ def cookie_txt_file():
 
 #insta cookies
 def instagram_cookie_file():
-    path = os.path.join(COOKIES_DIR, "cookies/instagram.txt")
-    return path if os.path.exists(path) else None
-    
+    if os.path.exists(INSTAGRAM_COOKIE_PATH):
+        return INSTAGRAM_COOKIE_PATH
+
+    if AUTO_REFRESH_INSTA_COOKIES:
+        asyncio.get_event_loop().run_until_complete(refresh_instagram_cookies())
+
+    return INSTAGRAM_COOKIE_PATH if os.path.exists(INSTAGRAM_COOKIE_PATH) else None
+
 
 # ========== NEW: Playwright cookie refresh (creates Netscape cookies.txt compatible with yt-dlp) ==========
 async def refresh_cookies_playwright(proxy: str = None, headless: bool = True, save_json: bool = False):
@@ -620,6 +696,35 @@ async def download_instagram_audio(link: str) -> str:
 
     except Exception as e:
         logger.error(f"❌ Instagram download failed: {e}")
+        return None
+
+async def download_instagram_video(link: str) -> str:
+    logger = get_logger("InstagramVideo")
+    logger.info("📸 Instagram video download started")
+
+    DOWNLOAD_DIR = "downloads"
+    os.makedirs(DOWNLOAD_DIR, exist_ok=True)
+
+    output_path = os.path.join(DOWNLOAD_DIR, f"insta_video_{int(time.time())}.mp4")
+
+    cookie_file = instagram_cookie_file()
+
+    ydl_opts = {
+        "format": "best",
+        "cookiefile": cookie_file,
+        "outtmpl": output_path,
+        "quiet": True,
+        "no_warnings": True,
+        "geo_bypass": True,
+        "merge_output_format": "mp4",
+    }
+
+    try:
+        yt_dlp.YoutubeDL(ydl_opts).download([link])
+        logger.info("✅ Instagram video ready")
+        return output_path
+    except Exception as e:
+        logger.error(f"❌ Instagram video failed: {e}")
         return None
 
 
