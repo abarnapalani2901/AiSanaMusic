@@ -619,20 +619,20 @@ class Call(PyTgCalls):
         @self.five.on_stream_end()
         async def stream_end_handler1(client, update: Update):
             if not isinstance(update, StreamAudioEnded):
-    return
-
-chat_id = update.chat_id
-check = db.get(chat_id)
-
-# 🔁 Auto-reconnect for live streams
-if check and check[0]["file"].startswith("live_"):
-    try:
-        await self.change_stream(client, chat_id)
-        return
-    except:
-        pass
-
-await self.change_stream(client, chat_id)
+                return
+                
+            chat_id = update.chat_id
+            check = db.get(chat_id)
+            
+            # 🔁 Auto-reconnect for live streams
+            if check and check[0]["file"].startswith("live_"):
+                try:
+                    await self.change_stream(client, chat_id)
+                    return
+                    except:
+                        pass
+                        
+            await self.change_stream(client, chat_id)
 
 
 VIP = Call()
