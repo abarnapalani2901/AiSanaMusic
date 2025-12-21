@@ -145,6 +145,12 @@ def cookie_txt_file():
     cookie_file = os.path.join(cookie_dir, random.choice(cookies_files))
     return cookie_file
 
+#insta cookies
+def instagram_cookie_file():
+    path = os.path.join(COOKIES_DIR, "cookies/instagram.txt")
+    return path if os.path.exists(path) else None
+    
+
 # ========== NEW: Playwright cookie refresh (creates Netscape cookies.txt compatible with yt-dlp) ==========
 async def refresh_cookies_playwright(proxy: str = None, headless: bool = True, save_json: bool = False):
     """
@@ -575,29 +581,47 @@ def is_instagram_url(url: str) -> bool:
 
 async def download_instagram_audio(link: str) -> str:
     logger = get_logger("InstagramAudio")
-    logger.info(f"📸 [INSTAGRAM] Downloading reel audio")
+    logger.info("📸 Instagram reel detected")
 
     DOWNLOAD_DIR = "downloads"
     os.makedirs(DOWNLOAD_DIR, exist_ok=True)
 
-    file_path = os.path.join(DOWNLOAD_DIR, f"insta_{int(time.time())}.webm")
+    file_path = os.path.join(DOWNLOAD_DIR, f"insta_{int(time.time())}.ogg")
 
-    cookie_file = cookie_txt_file()  # optional, works without too
-    ydl_opts = get_base_ytdlp_opts(cookie_file)
-    ydl_opts.update({
+    cookie_file = instagram_cookie_file()
+
+    ydl_opts = {
         "format": "bestaudio/best",
-        "outtmpl": file_path,
-        "merge_output_format": "webm",
-    })
+        "cookiefile": cookie_file,
+        "outtmpl": "downloads/insta_raw.%(ext)s",
+        "quiet": True,
+        "no_warnings": True,
+        "geo_bypass": True,
+        "postprocessors": [
+            {
+                "key": "FFmpegExtractAudio",
+                "preferredcodec": "opus",
+                "preferredquality": "128",
+            }
+        ],
+    }
 
     try:
         yt_dlp.YoutubeDL(ydl_opts).download([link])
-        logger.info("📸 [INSTAGRAM] Audio downloaded successfully")
+
+        # yt-dlp output name
+        for f in os.listdir("downloads"):
+            if f.startswith("insta_raw"):
+                os.rename(f"downloads/{f}", file_path)
+                break
+
+        logger.info("✅ Instagram reel audio ready for voice chat")
         return file_path
+
     except Exception as e:
-        logger.error(f"[INSTAGRAM AUDIO FAILED] {e}")
+        logger.error(f"❌ Instagram download failed: {e}")
         return None
-        
+
 
 # ========== YOUTUBE API CLASS (unchanged logic except calling cookie helpers where needed) ==========
 class YouTubeAPI:
