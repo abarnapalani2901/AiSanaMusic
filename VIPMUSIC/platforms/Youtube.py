@@ -876,9 +876,9 @@ class YouTubeAPI:
 
     try:
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-            info = ydl.extract_info(link, download=False)  # ✅ HERE
+            info = ydl.extract_info(link, download=False)
 
-            # 🔴 YOUTUBE LIVE DETECT (YOUR CODE GOES HERE)
+            # 🔴 YOUTUBE LIVE DETECT
             if is_youtube_live(info):
                 hls = info.get("hls_manifest_url")
                 if not hls:
@@ -886,26 +886,25 @@ class YouTubeAPI:
                         if f.get("protocol") in ("m3u8", "m3u8_native"):
                             hls = f.get("url")
                             break
-
                 if hls:
-                    return 1, hls   # ✅ LIVE PASSTHROUGH
+                    return 1, hls # ✅ LIVE PASSTHROUGH
 
             # 🟢 NORMAL VIDEO (DOWNLOAD)
             downloaded_file = await download_video(link)
             if downloaded_file:
                 return 1, downloaded_file
-
+    
     except Exception as e:
         logger.error(f"YouTube video error: {e}")
 
     return 0, None
-
-    async def playlist(self, link, limit, user_id, videoid: Union[bool, str] = None):
+    
+async def playlist(self, link, limit, user_id, videoid: Union[bool, str] = None):
         if videoid:
             link = self.listbase + link
         if "&" in link:
             link = link.split("&")[0]
-        cookie_file = cookie_txt_file()
+            cookie_file = cookie_txt_file()
         if not cookie_file:
             return []
         playlist = await shell_cmd(
@@ -956,8 +955,8 @@ class YouTubeAPI:
             formats_available = []
             r = ydl.extract_info(link, download=False)
             # ---------- YOUTUBE LIVE PASSTHROUGH ----------
-            if is_youtube_live(info):
-                hls_url = info.get("url") or info["formats"][0]["url"]
+            if is_youtube_live(r):
+                hls_url = r.get("hls_manifest_url") or r["formats"][0]["url"]
                 return hls_url, True
             #YT Pass through End-----
             for format in r["formats"]:
