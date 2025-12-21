@@ -914,11 +914,14 @@ class YouTubeAPI:
             link = self.base + link
 
         try:
-            if is_instagram_url(link):
-                downloaded_file = await download_instagram_audio(link)
-                if downloaded_file:
-                    return downloaded_file, True
-                return None, False
+            if is_instagram_url(link): # ---------- start INSTAGRAM (SEPARATE HANDLER) ----------
+                if songvideo:  # 🎥 Instagram VIDEO play
+                    file = await download_instagram_video(link)
+                    return (file, True) if file else (None, False)
+                else:  # 🎵 Instagram AUDIO play (voice chat)
+                    file = await download_instagram_audio(link)
+                    return (file, True) if file else (None, False)
+# Insta End
                 
             if songvideo or songaudio:
                 downloaded_file = await download_song(link)
