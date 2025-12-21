@@ -974,11 +974,9 @@ class YouTubeAPI:
             link = self.base + link
 
         try:
-            # ---------- M3U8 DIRECT STREAM ----------
-            if is_m3u8(link):
-            # No downloading, direct play
-            stream = await handle_m3u8_stream(link)
-            return stream["link"], True  # M3U8 Direct Stream end
+            if is_m3u8(link): # ----------Start M3U8 DIRECT STREAM ----------
+                stream = await handle_m3u8_stream(link) # No downloading, direct play
+                return stream["link"], True  # M3U8 Direct Stream end
             
             if is_instagram_url(link): # ---------- start INSTAGRAM (SEPARATE HANDLER) ----------
                 if songvideo:  # 🎥 Instagram VIDEO play
@@ -986,8 +984,7 @@ class YouTubeAPI:
                     return (file, True) if file else (None, False)
                 else:  # 🎵 Instagram AUDIO play (voice chat)
                     file = await download_instagram_audio(link)
-                    return (file, True) if file else (None, False)
-# Insta End
+                    return (file, True) if file else (None, False) # Insta End
                 
             if songvideo or songaudio:
                 downloaded_file = await download_song(link)
