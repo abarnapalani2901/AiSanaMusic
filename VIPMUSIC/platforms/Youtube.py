@@ -65,6 +65,37 @@ def get_logger(name: str):
 
 logger = get_logger("HeartBeat/platforms/Youtube.py")
 
+# ================= yt-dlp BASE OPTIONS (SPEED / STABILITY) =================
+def get_base_ytdlp_opts(cookie_file: str):
+    return {
+        "outtmpl": "downloads/%(id)s.%(ext)s",
+        "quiet": True,
+        "geo_bypass": True,
+        "nocheckcertificate": True,
+        "cookiefile": cookie_file,
+        "no_warnings": True,
+
+        # Speed Boosters
+        "source_address": "0.0.0.0",
+        "socket_timeout": 20,
+        "retries": 50,
+        "fragment_retries": 50,
+        "concurrent_fragment_downloads": 3,
+
+        # Aria2c
+        #"external_downloader": "aria2c",
+        #"external_downloader_args": [
+            #"-x", "16",
+            #"-s", "16",
+            #"-k", "1M",
+            #"--check-certificate=false",
+            #"--file-allocation=none",
+            #"--disk-cache=128M",
+            #"--max-tries=10",
+            #"--continue=true",
+        #],
+    }
+
 # ========== Utility: Proxy rotation helpers (NEW) ==========
 def _parse_proxy_list(proxy_env: str):
     if not proxy_env:
@@ -538,17 +569,32 @@ async def shell_cmd(cmd):
 # ========== YOUTUBE API CLASS (unchanged logic except calling cookie helpers where needed) ==========
 class YouTubeAPI:
     def __init__(self):
+        # 1. The "Base" URLs for construction
         self.base = "https://www.youtube.com/watch?v="
-        self.regex = r"(?:youtube\.com|youtu\.be)"
-        self.status = "https://www.youtube.com/oembed?url="
         self.listbase = "https://youtube.com/playlist?list="
+        self.status = "https://www.youtube.com/oembed?url="
+
+        # 2. THE PERFECT REGEX:
+        # Handles: Standard, Mobile (m.), Shorts, Live, Embeds, and Playlists.
+        # It ensures the ID is valid (11 chars for videos, PL... for playlists).
+        self.regex = re.compile(
+            r"(https?://)?(www\.|m\.)?"
+            r"(youtube\.com/(?:watch\?v=|shorts/|live/|embed/|playlist\?list=)|youtu\.be/)"
+            r"([A-Za-z0-9_-]{11}|PL[A-Za-z0-9_-]+)([&?][^\s]*)?"
+        )
+
+        # 3. ANSI CLEANER (From your code):
+        # Essential for cleaning terminal/shell output colors and formatting.
         self.reg = re.compile(r"\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])")
 
     async def exists(self, link: str, videoid: Union[bool, str] = None):
+        """
+        Improved check: verifies if the link matches the strict YouTube pattern.
+        """
         if videoid:
-            link = self.base + link
-        return bool(re.search(self.regex, link))
-
+            link = self.base + str(link)
+        return bool(self.regex.match(link))
+        
     async def url(self, message_1: Message) -> Union[str, None]:
         messages = [message_1]
         if message_1.reply_to_message:
