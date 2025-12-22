@@ -954,9 +954,10 @@ class YouTubeAPI:
                             
                     # Try manifest URL
                     manifest_url = info.get("manifest_url")
+                    
                     if manifest_url and "m3u8" in manifest_url:
-                    logger.info(f"Found manifest URL: {manifest_url}")
-                    return 1, manifest_url 
+                        logger.info(f"Found manifest URL: {manifest_url}")
+                        return 1, manifest_url 
                     
                     # Last resort: get the first available URL
                     if formats:
