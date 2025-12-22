@@ -901,6 +901,10 @@ class YouTubeAPI:
             with yt_dlp.YoutubeDL(ydl_opts) as ydl:
                 info = ydl.extract_info(link, download=False)
 
+                # Live Stream Check
+                if info.get("is_live") or info.get("live_status") == "is_live":
+                    return info.get("url") or info.get("formats", [{}])[0].get("url")    
+                
                 if is_youtube_live(info):
                     # 1. Try official manifest first
                     hls = info.get("hls_manifest_url")
