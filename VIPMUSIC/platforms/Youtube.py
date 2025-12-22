@@ -902,9 +902,27 @@ class YouTubeAPI:
                 info = ydl.extract_info(link, download=False)
 
                 if is_youtube_live(info):
+                    # 1. Try official manifest first
                     hls = info.get("hls_manifest_url")
                     if hls:
-                        return 1, hls  # ✅ LIVE PASSTHROUGH
+                        return 1, hls
+                    # 2. If no combined HLS, pick an audio+video together (if exists)
+                    best_url = None
+                    for f in info.get("formats") or []:
+                        proto = f.get("protocol")
+                        if proto and "m3u8" in proto and f.get("acodec") and f.get("vcodec"):
+                            best_url = f.get("url")
+                            break
+
+                    # 3. If combined not found, try audio-only HLS
+                    if not best_url:
+                        for f in info.get("formats") or []:
+                            if f.get("protocol") and "m3u8" in f.get("protocol") and f.get("acodec") and not f.get("vcodec"):
+                                best_url = f.get("url")
+                                break
+                            
+                    if best_url:
+                        return 1, best_url  # ✅ LIVE PASSTHROUGH
                         
                     # 🟢 NORMAL VIDEO (DOWNLOAD)
                     downloaded_file = await download_video(link)
