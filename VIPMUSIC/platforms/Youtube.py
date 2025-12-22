@@ -117,6 +117,19 @@ def get_base_ytdlp_opts(cookie_file: str):
         #],
 }
             
+
+# Detect Youtube Live URL's
+def is_youtube_live_url(url: str) -> bool:
+    """Check if URL is a YouTube live stream."""
+    live_patterns = [
+        "youtube.com/live/",
+        "youtu.be/live/",
+        "/live/",
+        "is_live=true",
+    ]
+    url_lower = url.lower()
+    return any(pattern in url_lower for pattern in live_patterns)
+
 # ========== INSTAGRAM COOKIE REFRESH ==========
 async def refresh_instagram_cookies(headless: bool = True):
     log = get_logger("InstagramCookie")
@@ -876,57 +889,104 @@ class YouTubeAPI:
     async def video(self, link: str, videoid: Union[bool, str] = None):
         if videoid:
             link = self.base + link
-            
-        if "&" in link:
-            link = link.split("&")[0]
-            
-        # Standardize /live/ links to watch?v= for better yt-dlp compatibility
-        if "/live/" in link: 
-            link = link.replace("/live/", "/watch?v=")
         
+        if "&" in link:
+            link = link.split("&")[0] 
+            
+        # Properly handle /live/ URLs
+        if "/live/" in link: 
+            # Extract the stream ID from /live/ URLs
+            if "youtube.com/live/" in link:
+                stream_id = link.split("/live/")[-1].split("?")[0]
+                link = f"https://www.youtube.com/watch?v={stream_id}"
+            elif "youtu.be/" in link:
+                # For short youtu.be links
+                stream_id = link.split("/")[-1].split("?")[0]
+                link = f"https://www.youtube.com/watch?v={stream_id}"
+                
         cookie_file = cookie_txt_file()
         if not cookie_file:
+            logger.error("No cookie file available for YouTube live stream")
             return 0, None
-            
+        
         proxy = choose_random_proxy(YTDLP_PROXY_POOL)
         ydl_opts = {
             "quiet": True,
             "cookiefile": cookie_file,
             "nocheckcertificate": True,
+            "live_from_start": True,
+            "hls_prefer_native": True,
             "format": "best",
+            "no_warnings": True,
+            "ignoreerrors": True,
         }
         
         if proxy:
-            ydl_opts["proxy"] = proxy
-
+                ydl_opts["proxy"] = proxy
+            
         try:
             with yt_dlp.YoutubeDL(ydl_opts) as ydl:
                 info = ydl.extract_info(link, download=False)
-
-                # ✅ FIXED: Corrected Live Stream Handling
-                if is_youtube_live(info):
-                    # 1. Try official manifest (HLS)
-                    hls = info.get("hls_manifest_url")
-                    if hls:
-                        return 1, hls
-                    
-                    # 2. Fallback to m3u8 formats
-                    for f in info.get("formats", []):
-                        if "m3u8" in f.get("protocol", "") or "m3u8" in f.get("url", ""):
-                            return 1, f["url"]
-                            
-                    # 3. Last resort: direct URL
-                    return 1, info.get("url") or info.get("formats", [{}])[0].get("url")
                 
-                # 🟢 NORMAL VIDEO (DOWNLOAD)
+                if not info:
+                    logger.error(f"Could not extract info for URL: {link}")
+                    return 0, None 
+                
+                # Check if it's a live stream
+                is_live = info.get("is_live") or info.get("live_status") in ["is_live", "was_live", "post_live"]
+                
+                logger.info(f"Live stream detection: is_live={is_live}, live_status={info.get('live_status')}")
+                if is_live:
+                    # Try to get HLS manifest URL
+                    hls_url = info.get("hls_manifest_url")
+                    if hls_url:
+                        logger.info(f"Found HLS manifest URL: {hls_url}")
+                        return 1, hls_url 
+                    
+                    # Try to find HLS format in formats
+                    formats = info.get("formats", [])
+                    for fmt in formats:
+                        proto = fmt.get("protocol", "")
+                        url = fmt.get("url", "")
+                        if "m3u8" in proto or "m3u8" in url:
+                            logger.info(f"Found HLS format: {url}")
+                            return 1, url 
+                            
+                    # Try manifest URL
+                    manifest_url = info.get("manifest_url")
+                    if manifest_url and "m3u8" in manifest_url:
+                    logger.info(f"Found manifest URL: {manifest_url}")
+                    return 1, manifest_url 
+                    
+                    # Last resort: get the first available URL
+                    if formats:
+                        first_url = formats[0].get("url")
+                        if first_url:
+                            logger.info(f"Using first available URL: {first_url}")
+                            return 1, first_url
+                            
+                    logger.error("No stream URL found for live stream")
+                    return 0, None 
+                    
+                # For non-live videos, try to download
+                logger.info("Not a live stream, attempting to download video")
                 downloaded_file = await download_video(link)
                 if downloaded_file:
                     return 1, downloaded_file
+                
+                return 0, None
         
+        except yt_dlp.utils.DownloadError as e:
+            logger.error(f"YouTube download error: {e}") 
+            # Check if it's an age-restricted or private video
+            if "Private video" in str(e) or "age restricted" in str(e).lower():
+                logger.warning("Video is private or age-restricted, trying with cookies...") 
+            # You might want to implement a fallback with cookies here
+            return 0, None
         except Exception as e:
             logger.error(f"YouTube video error: {e}")
-            
-        return 0, None
+            traceback.print_exc()
+            return 0, None
 
     async def download(
         self,
@@ -941,43 +1001,56 @@ class YouTubeAPI:
     ) -> str:
         if videoid:
             link = self.base + link
-
+            
         try:
-            # 1. Direct M3U8 links
+        # Handle YouTube live streams separately
+            if "/live/" in link or "youtube.com/live/" in link:
+                logger.info(f"Detected YouTube live stream: {link}")
+                # Get the stream URL directly
+                stream_result = await self.video(link, videoid)
+                if stream_result[0] == 1:  # Success
+                    stream_url = stream_result[1]
+                    # For live streams, we return the stream URL for direct playback
+                    return stream_url, True
+                else:
+                    return None, False
+                
             if is_m3u8(link):
-                return link, True
-
-            # 2. Instagram Links
+                stream = await handle_m3u8_stream(link)
+                return stream["link"], True
+            
             if is_instagram_url(link):
                 if songvideo:
                     file = await download_instagram_video(link)
+                    return (file, True) if file else (None, False)
                 else:
                     file = await download_instagram_audio(link)
-                return (file, True) if file else (None, False)
-
-            # 3. ✅ NEW: Check if YouTube link is Live before downloading
-            if "youtube.com" in link or "youtu.be" in link:
-                # Use a lightweight check to see if it's live
-                cookie_file = cookie_txt_file()
-                with yt_dlp.YoutubeDL({"quiet": True, "cookiefile": cookie_file}) as ydl:
-                    info = ydl.extract_info(link, download=False)
-                    if is_youtube_live(info):
-                        # Redirect to the video method's HLS logic
-                        status, stream_url = await self.video(link)
-                        return (stream_url, True) if status == 1 else (None, False)
-
-            # 4. Normal Download (for non-live)
-            if songvideo or songaudio or video:
-                func = download_video if video or songvideo else download_song
-                downloaded_file = await func(link)
-                return (downloaded_file, True) if downloaded_file else (None, False)
-
-            # Fallback
-            downloaded_file = await download_song(link)
-            return (downloaded_file, True) if downloaded_file else (None, False)
-
+                    return (file, True) if file else (None, False)
+                
+                if songvideo or songaudio:
+                    downloaded_file = await download_song(link)
+                    if downloaded_file:
+                        return downloaded_file, True
+                    else:
+                        return None, False
+                
+                elif video:
+                    downloaded_file = await download_video(link)
+                    if downloaded_file:
+                        return downloaded_file, True
+                    else:
+                        return None, False
+                    
+                else:
+                    downloaded_file = await download_song(link)
+                    if downloaded_file:
+                        return downloaded_file, True
+                    else:
+                        return None, False
+        
         except Exception as e:
-            logger.error(f"Download handler failed: {e}")
+            logger.error(f"API download failed: {e}")
+            traceback.print_exc()
             return None, False
     
     
