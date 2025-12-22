@@ -304,11 +304,7 @@ class Call(PyTgCalls):
         _ = get_string(language)
         # 🔁 Detect LIVE / HLS streams
         is_live = False
-        if isinstance(link, str) and (
-            ".m3u8" in link
-            or "youtube.com" in link
-            or "youtu.be" in link
-        ):
+        if isinstance(link, str) and ".m3u8" in link:
             is_live = True
             
         ffmpeg_args = LIVE_FFMPEG_OPTS if is_live else None
