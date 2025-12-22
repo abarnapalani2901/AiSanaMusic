@@ -786,6 +786,7 @@ async def play_with_reconnect(
 # ========== YOUTUBE API CLASS (unchanged logic except calling cookie helpers where needed) ==========
 class YouTubeAPI:
     def __init__(self):
+        # Updated Regex to ensure /live/ is captured correctly
         self.base = "https://www.youtube.com/watch?v="
         self.regex = re.compile(
             r"(https?://)?(www\.|m\.)?"
@@ -794,9 +795,6 @@ class YouTubeAPI:
         )
         self.status = "https://www.youtube.com/oembed?url="
         self.listbase = "https://youtube.com/playlist?list="
-        self.reg = re.compile(
-            r"\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])"
-        )
 
     async def exists(self, link: str, videoid: Union[bool, str] = None):
         if videoid:
@@ -882,7 +880,8 @@ class YouTubeAPI:
         if "&" in link:
             link = link.split("&")[0]
             
-        if "/live/" in link: # Fix /live/ links
+        # Standardize /live/ links to watch?v= for better yt-dlp compatibility
+        if "/live/" in link: 
             link = link.replace("/live/", "/watch?v=")
         
         cookie_file = cookie_txt_file()
@@ -894,53 +893,92 @@ class YouTubeAPI:
             "quiet": True,
             "cookiefile": cookie_file,
             "nocheckcertificate": True,
-            "live_from_start": True,
-            "hls_prefer_native": True,
             "format": "best",
         }
         
         if proxy:
             ydl_opts["proxy"] = proxy
+
         try:
             with yt_dlp.YoutubeDL(ydl_opts) as ydl:
                 info = ydl.extract_info(link, download=False)
 
-                # Live Stream Check
-                if info.get("is_live") or info.get("live_status") == "is_live":
-                    return info.get("url") or info.get("formats", [{}])[0].get("url")    
-                
+                # ✅ FIXED: Corrected Live Stream Handling
                 if is_youtube_live(info):
-                    # 1. Try official manifest first
+                    # 1. Try official manifest (HLS)
                     hls = info.get("hls_manifest_url")
                     if hls:
                         return 1, hls
-                    # 2. If no combined HLS, pick an audio+video together (if exists)
-                    best_url = None
-                    for f in info.get("formats") or []:
-                        proto = f.get("protocol")
-                        if proto and "m3u8" in proto and f.get("acodec") and f.get("vcodec"):
-                            best_url = f.get("url")
-                            break
-
-                    # 3. If combined not found, try audio-only HLS
-                    if not best_url:
-                        for f in info.get("formats") or []:
-                            if f.get("protocol") and "m3u8" in f.get("protocol") and f.get("acodec") and not f.get("vcodec"):
-                                best_url = f.get("url")
-                                break
+                    
+                    # 2. Fallback to m3u8 formats
+                    for f in info.get("formats", []):
+                        if "m3u8" in f.get("protocol", "") or "m3u8" in f.get("url", ""):
+                            return 1, f["url"]
                             
-                    if best_url:
-                        return 1, best_url  # ✅ LIVE PASSTHROUGH
-                        
-                    # 🟢 NORMAL VIDEO (DOWNLOAD)
-                    downloaded_file = await download_video(link)
-                    if downloaded_file:
-                        return 1, downloaded_file
+                    # 3. Last resort: direct URL
+                    return 1, info.get("url") or info.get("formats", [{}])[0].get("url")
+                
+                # 🟢 NORMAL VIDEO (DOWNLOAD)
+                downloaded_file = await download_video(link)
+                if downloaded_file:
+                    return 1, downloaded_file
         
         except Exception as e:
             logger.error(f"YouTube video error: {e}")
             
         return 0, None
+
+    async def download(
+        self,
+        link: str,
+        mystic,
+        video: Union[bool, str] = None,
+        videoid: Union[bool, str] = None,
+        songaudio: Union[bool, str] = None,
+        songvideo: Union[bool, str] = None,
+        format_id: Union[bool, str] = None,
+        title: Union[bool, str] = None,
+    ) -> str:
+        if videoid:
+            link = self.base + link
+
+        try:
+            # 1. Direct M3U8 links
+            if is_m3u8(link):
+                return link, True
+
+            # 2. Instagram Links
+            if is_instagram_url(link):
+                if songvideo:
+                    file = await download_instagram_video(link)
+                else:
+                    file = await download_instagram_audio(link)
+                return (file, True) if file else (None, False)
+
+            # 3. ✅ NEW: Check if YouTube link is Live before downloading
+            if "youtube.com" in link or "youtu.be" in link:
+                # Use a lightweight check to see if it's live
+                cookie_file = cookie_txt_file()
+                with yt_dlp.YoutubeDL({"quiet": True, "cookiefile": cookie_file}) as ydl:
+                    info = ydl.extract_info(link, download=False)
+                    if is_youtube_live(info):
+                        # Redirect to the video method's HLS logic
+                        status, stream_url = await self.video(link)
+                        return (stream_url, True) if status == 1 else (None, False)
+
+            # 4. Normal Download (for non-live)
+            if songvideo or songaudio or video:
+                func = download_video if video or songvideo else download_song
+                downloaded_file = await func(link)
+                return (downloaded_file, True) if downloaded_file else (None, False)
+
+            # Fallback
+            downloaded_file = await download_song(link)
+            return (downloaded_file, True) if downloaded_file else (None, False)
+
+        except Exception as e:
+            logger.error(f"Download handler failed: {e}")
+            return None, False
     
     
     async def playlist(self, link, limit, user_id, videoid: Union[bool, str] = None):
