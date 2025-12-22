@@ -123,7 +123,9 @@ def cookie_txt_file():
             logger.info("Cookies directory missing — attempting auto-refresh (AUTO_REFRESH_COOKIES is enabled).")
             try:
                 # attempt to refresh cookies
-                asyncio.get_event_loop().run_until_complete(refresh_cookies_playwright())
+                loop = asyncio.new_event_loop()
+                asyncio.set_event_loop(loop)
+                loop.run_until_complete(refresh_cookies_playwright())
             except Exception as e:
                 logger.error(f"Auto-refresh cookies failed: {e}")
         # still not present or creation failed
@@ -136,7 +138,9 @@ def cookie_txt_file():
         if AUTO_REFRESH_COOKIES:
             logger.info("No cookie files found — attempting auto-refresh (AUTO_REFRESH_COOKIES is enabled).")
             try:
-                asyncio.get_event_loop().run_until_complete(refresh_cookies_playwright())
+                loop = asyncio.new_event_loop()
+                asyncio.set_event_loop(loop)
+                loop.run_until_complete(refresh_cookies_playwright())
             except Exception as e:
                 logger.error(f"Auto-refresh cookies failed: {e}")
         cookies_files = [f for f in os.listdir(cookie_dir) if f.endswith(".txt")]
@@ -336,29 +340,54 @@ async def _post_with_api_refresh(url: str, json_payload: dict, headers: dict, se
         raise last_exception
     return None
 
-# ========== IMPROVED ID EXTRACTION HELPER ==========
+# ========== FIXED ID EXTRACTION HELPER ==========
 def get_yt_id(link: str):
     """Robustly extracts the video ID from any YouTube URL (watch, shorts, live, embed, youtu.be)."""
-    # More permissive pattern to catch all valid YouTube video IDs
+    # FIXED: Handle all YouTube URL formats including shorts and live streams
     patterns = [
-        r'(?:v=|/)([0-9A-Za-z_-]{11})',  # Standard 11-char ID from v= or after a slash
-        r'youtu\.be/([0-9A-Za-z_-]{11})'  # Short youtu.be links
+        r'(?:v=|\/shorts\/|\/live\/|\/embed\/|youtu\.be\/)([0-9A-Za-z_-]{11})',  # All 11-char ID patterns
+        r'(?:v=|/)([0-9A-Za-z_-]{11})',  # Fallback for other formats
     ]
+    
+    # Clean the link first
+    if "&" in link:
+        link = link.split("&")[0]
+    if "?" in link and "&" in link:
+        link = link.split("?")[0]
+    
     for pattern in patterns:
         match = re.search(pattern, link)
         if match:
             return match.group(1)
-    # If no pattern matches, return the original link (could be a full URL for yt-dlp)
+    # If no pattern matches, try to extract from search results format
+    if "youtube.com" in link and "watch" in link:
+        if "v=" in link:
+            video_id = link.split("v=")[1].split("&")[0].split("#")[0]
+            if len(video_id) == 11:
+                return video_id
     return link
 
-# ========== AUDIO / VIDEO DOWNLOAD LOGIC (Fixed cookie handling) ==========
+# ========== AUDIO / VIDEO DOWNLOAD LOGIC (Fixed cookie handling and URL processing) ==========
 async def download_song(link: str) -> str:
-    # USE THE NEW HELPER: This now works for Shorts and Live URLs
+    # Handle both URLs and search queries properly
+    if not link.startswith("http"):
+        # This is a search query, not a URL - get video ID from search
+        try:
+            results = VideosSearch(link, limit=1)
+            res = await results.next()
+            if res.get("result"):
+                link = f"https://www.youtube.com/watch?v={res['result'][0]['id']}"
+        except Exception as e:
+            logger.error(f"Search query failed: {e}")
+            return None
+    
+    # Use the improved helper for URL extraction
     video_id = get_yt_id(link)
     logger = get_logger("HeartBeat/platforms/Youtube.py")
-    logger.info(f"🎵 [AUDIO] Starting download process for ID: {video_id}")
+    logger.info(f"🎵 [AUDIO] Starting download process for ID: {video_id} from URL: {link}")
 
     if not video_id or len(video_id) < 3:
+        logger.error(f"Invalid video ID extracted: {video_id}")
         return None
 
     DOWNLOAD_DIR = "downloads"
@@ -414,9 +443,14 @@ async def download_song(link: str) -> str:
     # FALLBACK yt-dlp + cookies
     # ------------------------------
     cookie_file = cookie_txt_file()
-    if not cookie_file:
-        logger.error("No cookies found. Cannot fallback to yt-dlp.")
-        return None
+    
+    # FIXED: Check if cookie_file exists and is valid
+    if cookie_file and os.path.exists(cookie_file):
+        logger.info(f"Using cookie file: {cookie_file}")
+        cookie_available = True
+    else:
+        logger.warning("No valid cookie file found. Will attempt without cookies.")
+        cookie_available = False
 
     # choose a proxy for yt-dlp if provided
     proxy = choose_random_proxy(YTDLP_PROXY_POOL)
@@ -424,34 +458,54 @@ async def download_song(link: str) -> str:
         "format": "bestaudio/best",
         "outtmpl": file_path,
         "quiet": True,
+        "no_warnings": True,
+        "ignoreerrors": True,
     }
     
-    # FIXED: Only add cookiefile if cookie_file exists and is not None
-    if cookie_file and os.path.exists(cookie_file):
+    # FIXED: Only add cookiefile if available
+    if cookie_available:
         ydl_opts["cookiefile"] = cookie_file
-    else:
-        logger.warning("Cookie file not found or invalid. Continuing without cookies.")
     
     if proxy:
         ydl_opts["proxy"] = proxy
         logger.info(f"[yt-dlp] Using proxy: {proxy}")
 
     try:
+        logger.info(f"[yt-dlp] Attempting to download audio: {link}")
         yt_dlp.YoutubeDL(ydl_opts).download([link])
-        logger.info(f"[yt-dlp] Audio downloaded for {video_id}")
-        return file_path if os.path.exists(file_path) else None
+        
+        # Check if file was actually downloaded
+        if os.path.exists(file_path):
+            logger.info(f"[yt-dlp] Audio downloaded for {video_id}")
+            return file_path
+        else:
+            logger.error(f"[yt-dlp] Download failed - no file created for {video_id}")
+            return None
     except Exception as e:
         logger.error(f"[yt-dlp AUDIO FAILED] {e}")
         return None
 
 
 async def download_video(link: str) -> str:
-    # USE THE NEW HELPER: This now works for Shorts and Live URLs
+    # Handle both URLs and search queries properly
+    if not link.startswith("http"):
+        # This is a search query, not a URL - get video ID from search
+        try:
+            results = VideosSearch(link, limit=1)
+            res = await results.next()
+            if res.get("result"):
+                link = f"https://www.youtube.com/watch?v={res['result'][0]['id']}"
+        except Exception as e:
+            logger.error(f"Search query failed: {e}")
+            return None
+    
+    # Use the improved helper for URL extraction
     video_id = get_yt_id(link)
     logger = get_logger("HeartBeat/platforms/Youtube.py")
-    logger.info(f"🎥 [VIDEO] Starting download process for ID: {video_id}")
+    logger.info(f"🎥 [VIDEO] Starting download process for ID: {video_id} from URL: {link}")
 
     if not video_id or len(video_id) < 3:
+        logger.error(f"Invalid video ID extracted: {video_id}")
         return None
 
     DOWNLOAD_DIR = "downloads"
@@ -506,9 +560,14 @@ async def download_video(link: str) -> str:
     # FALLBACK yt-dlp + cookies
     # ------------------------------
     cookie_file = cookie_txt_file()
-    if not cookie_file:
-        logger.error("Cookies missing – cannot download video")
-        return None
+    
+    # FIXED: Check if cookie_file exists and is valid
+    if cookie_file and os.path.exists(cookie_file):
+        logger.info(f"Using cookie file: {cookie_file}")
+        cookie_available = True
+    else:
+        logger.warning("No valid cookie file found. Will attempt without cookies.")
+        cookie_available = False
 
     proxy = choose_random_proxy(YTDLP_PROXY_POOL)
     ydl_opts = {
@@ -516,22 +575,29 @@ async def download_video(link: str) -> str:
         "outtmpl": file_path,
         "merge_output_format": "mkv",
         "quiet": True,
+        "no_warnings": True,
+        "ignoreerrors": True,
     }
     
-    # FIXED: Only add cookiefile if cookie_file exists and is not None
-    if cookie_file and os.path.exists(cookie_file):
+    # FIXED: Only add cookiefile if available
+    if cookie_available:
         ydl_opts["cookiefile"] = cookie_file
-    else:
-        logger.warning("Cookie file not found or invalid. Continuing without cookies.")
     
     if proxy:
         ydl_opts["proxy"] = proxy
         logger.info(f"[yt-dlp] Using proxy: {proxy}")
 
     try:
+        logger.info(f"[yt-dlp] Attempting to download video: {link}")
         yt_dlp.YoutubeDL(ydl_opts).download([link])
-        logger.info(f"[yt-dlp] Video downloaded for {video_id}")
-        return file_path if os.path.exists(file_path) else None
+        
+        # Check if file was actually downloaded
+        if os.path.exists(file_path):
+            logger.info(f"[yt-dlp] Video downloaded for {video_id}")
+            return file_path
+        else:
+            logger.error(f"[yt-dlp] Download failed - no file created for {video_id}")
+            return None
     except Exception as e:
         logger.error(f"[yt-dlp VIDEO FAILED] {e}")
         return None
@@ -596,19 +662,19 @@ async def shell_cmd(cmd):
             return errorz.decode("utf-8")
     return out.decode("utf-8")
 
-# ========== YOUTUBE API CLASS (FIXED for Shorts and Live Streams) ==========
+# ========== YOUTUBE API CLASS (FIXED for all URL types) ==========
 class YouTubeAPI:
     def __init__(self):
         self.base = "https://www.youtube.com/watch?v="
         self.listbase = "https://youtube.com/playlist?list="
         self.status = "https://www.youtube.com/oembed?url="
-        # FIXED REGEX: Now properly matches /shorts/ and /live/ URLs
+        # FIXED REGEX: Now properly matches all URL types
         self.regex = re.compile(
             r"(https?://)?(www\.|m\.)?"
             r"(youtube\.com/(?:watch\?v=|shorts/|live/|embed/|playlist\?list=)|youtu\.be/)"
             r"([A-Za-z0-9_-]{11}|PL[A-Za-z0-9_-]+)([&?][^\s]*)?"
         )
-        self.reg = re.compile(r"\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])")
+        self.reg = re.compile(r"\x1B(?:[@-Z\\-_]|\[[0-9?]*[ -/]*[@-~])")
 
     async def exists(self, link: str, videoid: Union[bool, str] = None):
         if videoid:
@@ -636,6 +702,14 @@ class YouTubeAPI:
             link = self.base + link
         if "&" in link:
             link = link.split("&")[0]
+        
+        # Handle Shorts and Live URLs by converting to watch URL format
+        if "/shorts/" in link:
+            video_id = get_yt_id(link)
+            link = f"https://www.youtube.com/watch?v={video_id}"
+        elif "/live/" in link:
+            video_id = get_yt_id(link)
+            link = f"https://www.youtube.com/watch?v={video_id}"
         
         results = VideosSearch(link, limit=1)
         res = await results.next()
@@ -793,7 +867,7 @@ class YouTubeAPI:
             link = self.base + link
 
         try:
-            # FIXED: Call the standalone module functions, not non-existent class methods
+            # FIXED: Call the standalone module functions
             if songvideo or songaudio:
                 downloaded_file = await download_song(link)  # Calls the standalone function
                 if downloaded_file:
