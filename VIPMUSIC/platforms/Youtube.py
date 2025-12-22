@@ -566,35 +566,35 @@ async def shell_cmd(cmd):
             return errorz.decode("utf-8")
     return out.decode("utf-8")
 
+# Updated YouTube.py snippet for Live Support
+
+# 1. Update the ID Extraction helper to handle /live/ and /shorts/
+def get_yt_id(link: str):
+    """Robustly extracts the 11-character video ID from any YouTube URL."""
+    pattern = r"(?:v=|\/shorts\/|\/live\/|\/embed\/|youtu\.be\/)([A-Za-z0-9_-]{11})"
+    match = re.search(pattern, link)
+    return match.group(1) if match else link
+
+# 2. Update the Metadata Details to handle "LIVE" duration
 # ========== YOUTUBE API CLASS (unchanged logic except calling cookie helpers where needed) ==========
 class YouTubeAPI:
     def __init__(self):
-        # 1. The "Base" URLs for construction
         self.base = "https://www.youtube.com/watch?v="
         self.listbase = "https://youtube.com/playlist?list="
         self.status = "https://www.youtube.com/oembed?url="
-
-        # 2. THE PERFECT REGEX:
-        # Handles: Standard, Mobile (m.), Shorts, Live, Embeds, and Playlists.
-        # It ensures the ID is valid (11 chars for videos, PL... for playlists).
+        # Strict Regex including /live/
         self.regex = re.compile(
             r"(https?://)?(www\.|m\.)?"
             r"(youtube\.com/(?:watch\?v=|shorts/|live/|embed/|playlist\?list=)|youtu\.be/)"
             r"([A-Za-z0-9_-]{11}|PL[A-Za-z0-9_-]+)([&?][^\s]*)?"
         )
-
-        # 3. ANSI CLEANER (From your code):
-        # Essential for cleaning terminal/shell output colors and formatting.
         self.reg = re.compile(r"\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])")
 
     async def exists(self, link: str, videoid: Union[bool, str] = None):
-        """
-        Improved check: verifies if the link matches the strict YouTube pattern.
-        """
         if videoid:
-            link = self.base + str(link)
+            link = self.base + str(videoid)
         return bool(self.regex.match(link))
-        
+
     async def url(self, message_1: Message) -> Union[str, None]:
         messages = [message_1]
         if message_1.reply_to_message:
@@ -616,25 +616,29 @@ class YouTubeAPI:
             link = self.base + link
         if "&" in link:
             link = link.split("&")[0]
+        
         results = VideosSearch(link, limit=1)
-        for result in (await results.next())["result"]:
-            title = result["title"]
-            duration_min = result["duration"]
-            thumbnail = result["thumbnails"][0]["url"].split("?")[0]
-            vidid = result["id"]
-            duration_sec = int(time_to_seconds(duration_min)) if duration_min else 0
+        res = await results.next()
+        
+        if not res.get("result"):
+            return None, None, 0, None, None
+
+        result = res["result"][0]
+        title = result["title"]
+        duration_min = result["duration"] # Can be "LIVE" or "10:05"
+        thumbnail = result["thumbnails"][0]["url"].split("?")[0]
+        vidid = result["id"]
+        
+        # Handle Live Stream duration
+        if duration_min is None or str(duration_min).upper() == "LIVE":
+            duration_sec = 0
+            duration_min = "LIVE"
+        else:
+            duration_sec = int(time_to_seconds(duration_min))
+            
         return title, duration_min, duration_sec, thumbnail, vidid
 
-    async def title(self, link: str, videoid: Union[bool, str] = None):
-        if videoid:
-            link = self.base + link
-        if "&" in link:
-            link = link.split("&")[0]
-        results = VideosSearch(link, limit=1)
-        for result in (await results.next())["result"]:
-            return result["title"]
-
-    async def duration(self, link: str, videoid: Union[bool, str] = None):
+   async def duration(self, link: str, videoid: Union[bool, str] = None):
         if videoid:
             link = self.base + link
         if "&" in link:
@@ -651,22 +655,74 @@ class YouTubeAPI:
         results = VideosSearch(link, limit=1)
         for result in (await results.next())["result"]:
             return result["thumbnails"][0]["url"].split("?")[0]
+          
 
     async def video(self, link: str, videoid: Union[bool, str] = None):
         if videoid:
             link = self.base + link
-        if "&" in link:
-            link = link.split("&")[0]
         try:
+            # Check if it's a live stream first (for active lives, we usually play, not download)
+            # but for this logic we just call download_video
             downloaded_file = await download_video(link)
             if downloaded_file:
                 return 1, downloaded_file
-            else:
-                return 0, "Video API did not return a valid file."
+            return 0, "Failed to process video."
         except Exception as e:
-            print(f"Video API failed: {e}")
-            return 0, f"Video API failed: {e}"
+            return 0, str(e) 
 
+    # 3. Update Download functions to use the new ID extractor
+    async def download_song(link: str) -> str:
+        video_id = get_yt_id(link)
+        logger.info(f"🎵 [AUDIO] Processing: {video_id}")
+        
+        DOWNLOAD_DIR = "downloads"
+        os.makedirs(DOWNLOAD_DIR, exist_ok=True)
+        file_path = os.path.join(DOWNLOAD_DIR, f"{video_id}.webm")
+        
+        if os.path.exists(file_path):
+            return file_path 
+            
+        # API Fallback Logic
+        try:
+            async with aiohttp.ClientSession() as session:
+                payload = {"url": video_id, "type": "audio"}
+                headers = {"X-API-KEY": API_KEY}
+                resp = await _post_with_api_refresh(f"{API_URL}/download", payload, headers, session)
+                if resp and resp.status == 200:
+                    data = await resp.json()
+                    if data.get("status") == "success":
+                        async with session.get(f"{API_URL}{data['download_url']}") as f_resp:
+                            with open(file_path, "wb") as f:
+                                f.write(await f_resp.read())
+                        return file_path
+                        
+        except: pass 
+        
+        # yt-dlp Fallback (Critical for Live Streams)
+        cookie_file = cookie_txt_file()
+        proxy = choose_random_proxy(YTDLP_PROXY_POOL)
+        
+        ydl_opts = {
+            "format": "bestaudio/best",
+            "outtmpl": file_path,
+            "cookiefile": cookie_file,
+            "quiet": True,
+            "noplaylist": True,
+        }
+        # For Live Streams, prevent yt-dlp from downloading infinitely 
+        # If the user tries to download an active live, we only get the current cache.
+        ydl_opts["live_from_start"] = False 
+        
+        if proxy: ydl_opts["proxy"] = proxy
+            
+        try:
+            loop = asyncio.get_event_loop()
+            await loop.run_in_executor(None, lambda: yt_dlp.YoutubeDL(ydl_opts).download([link]))
+            return file_path if os.path.exists(file_path) else None
+        except Exception as e:
+            logger.error(f"Download failed: {e}")
+            return None
+    
     async def playlist(self, link, limit, user_id, videoid: Union[bool, str] = None):
         if videoid:
             link = self.listbase + link
