@@ -638,7 +638,7 @@ class YouTubeAPI:
             
         return title, duration_min, duration_sec, thumbnail, vidid
 
-   async def duration(self, link: str, videoid: Union[bool, str] = None):
+    async def duration(self, link: str, videoid: Union[bool, str] = None):
         if videoid:
             link = self.base + link
         if "&" in link:
@@ -655,7 +655,7 @@ class YouTubeAPI:
         results = VideosSearch(link, limit=1)
         for result in (await results.next())["result"]:
             return result["thumbnails"][0]["url"].split("?")[0]
-          
+            
 
     async def video(self, link: str, videoid: Union[bool, str] = None):
         if videoid:
@@ -671,7 +671,7 @@ class YouTubeAPI:
             return 0, str(e) 
 
     # 3. Update Download functions to use the new ID extractor
-    async def download_song(link: str) -> str:
+    async def download_song(self, link: str) -> str:
         video_id = get_yt_id(link)
         logger.info(f"🎵 [AUDIO] Processing: {video_id}")
         
