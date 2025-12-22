@@ -351,7 +351,7 @@ def get_yt_id(link: str):
     # If no pattern matches, return the original link (could be a full URL for yt-dlp)
     return link
 
-# ========== AUDIO / VIDEO DOWNLOAD LOGIC (Updated with improved ID extraction) ==========
+# ========== AUDIO / VIDEO DOWNLOAD LOGIC (Fixed cookie handling) ==========
 async def download_song(link: str) -> str:
     # USE THE NEW HELPER: This now works for Shorts and Live URLs
     video_id = get_yt_id(link)
@@ -359,7 +359,7 @@ async def download_song(link: str) -> str:
     logger.info(f"🎵 [AUDIO] Starting download process for ID: {video_id}")
 
     if not video_id or len(video_id) < 3:
-        return
+        return None
 
     DOWNLOAD_DIR = "downloads"
     os.makedirs(DOWNLOAD_DIR, exist_ok=True)
@@ -423,9 +423,15 @@ async def download_song(link: str) -> str:
     ydl_opts = {
         "format": "bestaudio/best",
         "outtmpl": file_path,
-        "cookiefile": cookie_file,
         "quiet": True,
     }
+    
+    # FIXED: Only add cookiefile if cookie_file exists and is not None
+    if cookie_file and os.path.exists(cookie_file):
+        ydl_opts["cookiefile"] = cookie_file
+    else:
+        logger.warning("Cookie file not found or invalid. Continuing without cookies.")
+    
     if proxy:
         ydl_opts["proxy"] = proxy
         logger.info(f"[yt-dlp] Using proxy: {proxy}")
@@ -433,7 +439,7 @@ async def download_song(link: str) -> str:
     try:
         yt_dlp.YoutubeDL(ydl_opts).download([link])
         logger.info(f"[yt-dlp] Audio downloaded for {video_id}")
-        return file_path
+        return file_path if os.path.exists(file_path) else None
     except Exception as e:
         logger.error(f"[yt-dlp AUDIO FAILED] {e}")
         return None
@@ -446,7 +452,7 @@ async def download_video(link: str) -> str:
     logger.info(f"🎥 [VIDEO] Starting download process for ID: {video_id}")
 
     if not video_id or len(video_id) < 3:
-        return
+        return None
 
     DOWNLOAD_DIR = "downloads"
     os.makedirs(DOWNLOAD_DIR, exist_ok=True)
@@ -508,10 +514,16 @@ async def download_video(link: str) -> str:
     ydl_opts = {
         "format": "bestvideo+bestaudio/best",
         "outtmpl": file_path,
-        "cookiefile": cookie_file,
         "merge_output_format": "mkv",
         "quiet": True,
     }
+    
+    # FIXED: Only add cookiefile if cookie_file exists and is not None
+    if cookie_file and os.path.exists(cookie_file):
+        ydl_opts["cookiefile"] = cookie_file
+    else:
+        logger.warning("Cookie file not found or invalid. Continuing without cookies.")
+    
     if proxy:
         ydl_opts["proxy"] = proxy
         logger.info(f"[yt-dlp] Using proxy: {proxy}")
@@ -519,7 +531,7 @@ async def download_video(link: str) -> str:
     try:
         yt_dlp.YoutubeDL(ydl_opts).download([link])
         logger.info(f"[yt-dlp] Video downloaded for {video_id}")
-        return file_path
+        return file_path if os.path.exists(file_path) else None
     except Exception as e:
         logger.error(f"[yt-dlp VIDEO FAILED] {e}")
         return None
@@ -534,13 +546,14 @@ async def check_file_size(link):
 
         # choose proxy if available
         proxy = choose_random_proxy(YTDLP_PROXY_POOL)
-        proxy_arg = f"--proxy \"{proxy}\"" if proxy else ""
+        
+        # Build command with proper cookie handling
+        cmd_parts = ["yt-dlp", "--cookies", cookie_file, "-J", link]
+        if proxy:
+            cmd_parts.extend(["--proxy", proxy])
 
         proc = await asyncio.create_subprocess_exec(
-            "yt-dlp",
-            "--cookies", cookie_file,
-            "-J",
-            link,
+            *cmd_parts,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE
         )
@@ -668,8 +681,6 @@ class YouTubeAPI:
         if videoid:
             link = self.base + link
         try:
-            # Check if it's a live stream first (for active lives, we usually play, not download)
-            # but for this logic we just call download_video
             downloaded_file = await download_video(link)
             if downloaded_file:
                 return 1, downloaded_file
@@ -723,7 +734,12 @@ class YouTubeAPI:
         cookie_file = cookie_txt_file()
         if not cookie_file:
             return [], link
-        ytdl_opts = {"quiet": True, "cookiefile": cookie_file}
+        ytdl_opts = {"quiet": True}
+        
+        # FIXED: Only add cookiefile if cookie_file exists
+        if cookie_file and os.path.exists(cookie_file):
+            ytdl_opts["cookiefile"] = cookie_file
+        
         # add proxy if available
         proxy = choose_random_proxy(YTDLP_PROXY_POOL)
         if proxy:
