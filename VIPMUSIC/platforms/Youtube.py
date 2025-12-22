@@ -336,9 +336,25 @@ async def _post_with_api_refresh(url: str, json_payload: dict, headers: dict, se
         raise last_exception
     return None
 
-# ========== AUDIO / VIDEO DOWNLOAD LOGIC (kept original behaviour, with small drops for proxies and auto-refresh) ==========
+# ========== IMPROVED ID EXTRACTION HELPER ==========
+def get_yt_id(link: str):
+    """Robustly extracts the video ID from any YouTube URL (watch, shorts, live, embed, youtu.be)."""
+    # More permissive pattern to catch all valid YouTube video IDs
+    patterns = [
+        r'(?:v=|/)([0-9A-Za-z_-]{11})',  # Standard 11-char ID from v= or after a slash
+        r'youtu\.be/([0-9A-Za-z_-]{11})'  # Short youtu.be links
+    ]
+    for pattern in patterns:
+        match = re.search(pattern, link)
+        if match:
+            return match.group(1)
+    # If no pattern matches, return the original link (could be a full URL for yt-dlp)
+    return link
+
+# ========== AUDIO / VIDEO DOWNLOAD LOGIC (Updated with improved ID extraction) ==========
 async def download_song(link: str) -> str:
-    video_id = link.split('v=')[-1].split('&')[0] if 'v=' in link else link
+    # USE THE NEW HELPER: This now works for Shorts and Live URLs
+    video_id = get_yt_id(link)
     logger = get_logger("HeartBeat/platforms/Youtube.py")
     logger.info(f"🎵 [AUDIO] Starting download process for ID: {video_id}")
 
@@ -424,7 +440,8 @@ async def download_song(link: str) -> str:
 
 
 async def download_video(link: str) -> str:
-    video_id = link.split('v=')[-1].split('&')[0] if 'v=' in link else link
+    # USE THE NEW HELPER: This now works for Shorts and Live URLs
+    video_id = get_yt_id(link)
     logger = get_logger("HeartBeat/platforms/Youtube.py")
     logger.info(f"🎥 [VIDEO] Starting download process for ID: {video_id}")
 
@@ -566,23 +583,13 @@ async def shell_cmd(cmd):
             return errorz.decode("utf-8")
     return out.decode("utf-8")
 
-# Updated YouTube.py snippet for Live Support
-
-# 1. Update the ID Extraction helper to handle /live/ and /shorts/
-def get_yt_id(link: str):
-    """Robustly extracts the 11-character video ID from any YouTube URL."""
-    pattern = r"(?:v=|\/shorts\/|\/live\/|\/embed\/|youtu\.be\/)([A-Za-z0-9_-]{11})"
-    match = re.search(pattern, link)
-    return match.group(1) if match else link
-
-# 2. Update the Metadata Details to handle "LIVE" duration
-# ========== YOUTUBE API CLASS (unchanged logic except calling cookie helpers where needed) ==========
+# ========== YOUTUBE API CLASS (FIXED for Shorts and Live Streams) ==========
 class YouTubeAPI:
     def __init__(self):
         self.base = "https://www.youtube.com/watch?v="
         self.listbase = "https://youtube.com/playlist?list="
         self.status = "https://www.youtube.com/oembed?url="
-        # Strict Regex including /live/
+        # FIXED REGEX: Now properly matches /shorts/ and /live/ URLs
         self.regex = re.compile(
             r"(https?://)?(www\.|m\.)?"
             r"(youtube\.com/(?:watch\?v=|shorts/|live/|embed/|playlist\?list=)|youtu\.be/)"
@@ -668,61 +675,8 @@ class YouTubeAPI:
                 return 1, downloaded_file
             return 0, "Failed to process video."
         except Exception as e:
-            return 0, str(e) 
+            return 0, str(e)
 
-    # 3. Update Download functions to use the new ID extractor
-    async def download_song(self, link: str) -> str:
-        video_id = get_yt_id(link)
-        logger.info(f"🎵 [AUDIO] Processing: {video_id}")
-        
-        DOWNLOAD_DIR = "downloads"
-        os.makedirs(DOWNLOAD_DIR, exist_ok=True)
-        file_path = os.path.join(DOWNLOAD_DIR, f"{video_id}.webm")
-        
-        if os.path.exists(file_path):
-            return file_path 
-            
-        # API Fallback Logic
-        try:
-            async with aiohttp.ClientSession() as session:
-                payload = {"url": video_id, "type": "audio"}
-                headers = {"X-API-KEY": API_KEY}
-                resp = await _post_with_api_refresh(f"{API_URL}/download", payload, headers, session)
-                if resp and resp.status == 200:
-                    data = await resp.json()
-                    if data.get("status") == "success":
-                        async with session.get(f"{API_URL}{data['download_url']}") as f_resp:
-                            with open(file_path, "wb") as f:
-                                f.write(await f_resp.read())
-                        return file_path
-                        
-        except: pass 
-        
-        # yt-dlp Fallback (Critical for Live Streams)
-        cookie_file = cookie_txt_file()
-        proxy = choose_random_proxy(YTDLP_PROXY_POOL)
-        
-        ydl_opts = {
-            "format": "bestaudio/best",
-            "outtmpl": file_path,
-            "cookiefile": cookie_file,
-            "quiet": True,
-            "noplaylist": True,
-        }
-        # For Live Streams, prevent yt-dlp from downloading infinitely 
-        # If the user tries to download an active live, we only get the current cache.
-        ydl_opts["live_from_start"] = False 
-        
-        if proxy: ydl_opts["proxy"] = proxy
-            
-        try:
-            loop = asyncio.get_event_loop()
-            await loop.run_in_executor(None, lambda: yt_dlp.YoutubeDL(ydl_opts).download([link]))
-            return file_path if os.path.exists(file_path) else None
-        except Exception as e:
-            logger.error(f"Download failed: {e}")
-            return None
-    
     async def playlist(self, link, limit, user_id, videoid: Union[bool, str] = None):
         if videoid:
             link = self.listbase + link
@@ -823,22 +777,23 @@ class YouTubeAPI:
             link = self.base + link
 
         try:
+            # FIXED: Call the standalone module functions, not non-existent class methods
             if songvideo or songaudio:
-                downloaded_file = await download_song(link)
+                downloaded_file = await download_song(link)  # Calls the standalone function
                 if downloaded_file:
                     return downloaded_file, True
                 else:
                     return None, False
 
             elif video:
-                downloaded_file = await download_video(link)
+                downloaded_file = await download_video(link)  # Calls the standalone function
                 if downloaded_file:
                     return downloaded_file, True
                 else:
                     return None, False
 
             else:
-                downloaded_file = await download_song(link)
+                downloaded_file = await download_song(link)  # Calls the standalone function
                 if downloaded_file:
                     return downloaded_file, True
                 else:
