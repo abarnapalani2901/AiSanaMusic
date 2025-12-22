@@ -787,7 +787,11 @@ async def play_with_reconnect(
 class YouTubeAPI:
     def __init__(self):
         self.base = "https://www.youtube.com/watch?v="
-        self.regex = r"(?:youtube\.com|youtu\.be)"
+        self.regex = re.compile(
+            r"(https?://)?(www\.|m\.)?"
+            r"(youtube\.com/(watch\?v=|shorts/|live/|embed/|playlist\?list=)|youtu\.be/)"
+            r"([A-Za-z0-9_-]{11}|PL[A-Za-z0-9_-]+)([&?][^\s]*)?"
+        )
         self.status = "https://www.youtube.com/oembed?url="
         self.listbase = "https://youtube.com/playlist?list="
         self.reg = re.compile(
