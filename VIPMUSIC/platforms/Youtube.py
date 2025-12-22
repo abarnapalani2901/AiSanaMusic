@@ -890,8 +890,9 @@ class YouTubeAPI:
             "quiet": True,
             "cookiefile": cookie_file,
             "nocheckcertificate": True,
-            "live_from_start": False,
+            "live_from_start": True,
             "hls_prefer_native": True,
+            "format": "best",
         }
         
         if proxy:
@@ -901,12 +902,7 @@ class YouTubeAPI:
                 info = ydl.extract_info(link, download=False)
 
                 if is_youtube_live(info):
-                    hls = None
-                    for f in info.get("formats", []):
-                        if f.get("protocol") in ("m3u8", "m3u8_native"):
-                            hls = f.get("url")
-                            break
-                            
+                    hls = info.get("hls_manifest_url")
                     if hls:
                         return 1, hls  # ✅ LIVE PASSTHROUGH
                         
