@@ -7,8 +7,8 @@ from pyrogram.types import (
 )
 from pyrogram.errors import Unauthorized
 
-# --- IMPORT THE MUSIC BUTTONS HERE ---
-from VIPMUSIC.utils.inlinequery import answer as music_buttons 
+# Import Music Buttons (As per previous request)
+from VIPMUSIC.utils.inlinequery import answer as music_buttons
 
 print("[whisper] whisper")
 
@@ -20,6 +20,7 @@ async def _whisper(_, inline_query):
     data = inline_query.query
     results = []
     
+    # Needs at least 2 words (User + Message)
     if len(data.split()) < 2:
         mm = [
             InlineQueryResultArticle(
@@ -32,9 +33,26 @@ async def _whisper(_, inline_query):
         ]
     else:
         try:
-            user_id = data.split()[0]
-            msg = data.split(None, 1)[1]
-            user = await _.get_users(user_id)
+            splitted = data.split()
+            user = None
+            msg = ""
+
+            # --- DUAL FORMAT LOGIC START ---
+            
+            # Attempt 1: Check if the FIRST word is the user (@User Message)
+            try:
+                user = await _.get_users(splitted[0])
+                msg = " ".join(splitted[1:])
+            except:
+                # Attempt 2: If first word failed, check if LAST word is the user (Message @User)
+                try:
+                    user = await _.get_users(splitted[-1])
+                    msg = " ".join(splitted[:-1])
+                except:
+                    # If both fail, raise error to go to "Invalid User" block
+                    raise Exception("User not found")
+
+            # --- DUAL FORMAT LOGIC END ---
             
             whisper_btn = InlineKeyboardMarkup([[InlineKeyboardButton("❥ Wʜɪsᴘᴇʀ", callback_data=f"fdaywhisper_{inline_query.from_user.id}_{user.id}")]])
             one_time_whisper_btn = InlineKeyboardMarkup([[InlineKeyboardButton("☞ Oɴᴇ-Tɪᴍᴇ Wʜɪsᴘᴇʀ", callback_data=f"fdaywhisper_{inline_query.from_user.id}_{user.id}_one")]])
@@ -113,8 +131,7 @@ async def in_help():
             reply_markup=switch_btn
         )
     ]
-    
-    # HERE WE COMBINE THEM: Whisper First + Music Buttons Second
+    # Shows Whisper First, then Music Buttons
     return whisper_answers + music_buttons
 
 
