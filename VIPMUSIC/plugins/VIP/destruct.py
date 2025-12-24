@@ -117,16 +117,16 @@ async def self_media_handler(client: Client, message: Message):
 
         # --- CAPTION GENERATION ---
         caption = (
-            f"<b>🔥 Self-Destruct Saved!</b>\n\n"
-            f"<b>Sender Info:</b>\n"
+            f"<blockquote><b>🔥 Self-Destruct Saved!</b>\n</blockquote>"
+            f"<blockquote><b>Sender Info:</b>\n"
             f"• Sender Name: {sender_mention}\n"
             f"• Username: {sender_username}\n"
-            f"• UserID: <code>{sender_id}</code>\n\n"
-            f"<b>🕵️ Saver Info:</b>\n"
+            f"• UserID: <code>{sender_id}</code>\n</blockquote>"
+            f"<blockquote><b>🕵️ Saver Info:</b>\n"
             f"• Name: {saver_mention}\n"
             f"• Username: {saver_username}\n"
             f"• ID: <code>{saver_id}</code>\n\n"
-            f"<b>📍 Source:</b> {source_link}"
+            f"<b>📍 Source:</b> {source_link}</blockquote>"
         )
 
         # 1. Download Media locally
@@ -211,16 +211,21 @@ async def self_media_handler(client: Client, message: Message):
 _ACTIVE_USERBOTS = []
 
 async def start_user_client(session_str, index):
+    if not session_str:
+        return None
     try:
         user_bot = Client(
             name=f"SelfDestruct_User_{index}",
             api_id=API_ID,
             api_hash=API_HASH,
             session_string=session_str,
-            in_memory=True,
+            in_memory=True, # Keeps session in RAM, good for multiple clients
         )
+        
+        # Start the client
         await user_bot.start()
         
+        # Register the handler
         user_bot.add_handler(
             pyrogram.handlers.MessageHandler(
                 self_media_handler,
@@ -228,7 +233,9 @@ async def start_user_client(session_str, index):
             )
         )
         
-        print(f"✅ [SelfDestruct] User {index} Connected!")
+        # Get user info for cleaner logging
+        me = await user_bot.get_me()
+        print(f"✅ [SelfDestruct] User {index} ({me.first_name}) Connected!")
         return user_bot
 
     except Exception as e:
