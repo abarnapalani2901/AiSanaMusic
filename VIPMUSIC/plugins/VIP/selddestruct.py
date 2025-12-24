@@ -1,79 +1,130 @@
-import os
 import asyncio
-from pyrogram import filters
+import os
+from pyrogram import Client, filters
 from pyrogram.types import (
-    Message, InlineKeyboardMarkup, InlineKeyboardButton, 
-    InlineQueryResultArticle, InputTextMessageContent
+    Message, InlineQueryResultArticle, InputTextMessageContent
 )
 from VIPMUSIC import app
-from VIPMUSIC.core.userbot import assistants
+from config import API_ID, API_HASH
 
-# --- CONFIGURATION ---
-# This matches the text sent when you click the inline button.
-COMMAND_TRIGGER = "savedestruct" 
+# ==========================================
+#  🔧 CONFIGURATION SECTION
+# ==========================================
 
-# --- 1. INLINE QUERY HANDLER (The Trigger) ---
-# We use group=-1 to make sure this runs even if Whisper catches other queries.
+# Add as many String Sessions as you want here.
+# Format: "STRING_SESSION_CODE",
+USER_STRINGS = [
+    "BQFexMIAcaS4BBM86YyonAxGIDtHyiBJhTjjhLzZ5nygdn4yQEs4HJnxR-IEvwc8Qm-W2gdIj_THzRh9zd2ibMs6tEO7pTi5lf_whGBu3m-5veCGkpPzdg3vJSW5nlwDRD4EVY9AkHPd_-cTpYwkYuN_irCczc4w4iUEbioXIGes0OrnhZsXj78SmoNIYvxx2wCokysDCdQxCkgRmsHbTqkIsm-Ij6o3_YOfnOgO-s4zn0ssWv8hr0QnxX-1ZUsXfVgau5DqFaMrQwnBB_6NAML8T0myrDcQT6qASBNg-DMk6hLK2VMhnKy2U_5gMhehY8sVn4TokkLl7esLxrwT3ahLE5SePwAAAAHoATkvAA", # shaashi my assistant
+    #"Your_String_Session_2_Here",
+    # "Your_String_Session_3_Here",
+]
+
+# The secret command triggered by the button
+TRIGGER_CMD = "sdestruct"
+
+# ==========================================
+#  1. INLINE TRIGGER (The Button)
+# ==========================================
+# This works for everyone, but only those in USER_STRINGS will actually save.
 @app.on_inline_query(filters.regex(r"^save"), group=-1)
 async def inline_save_trigger(_, inline_query):
-    
-    # The button that appears when you type "@Bot save"
     results = [
         InlineQueryResultArticle(
-            title="📥 Sᴀᴠᴇ Tʜɪs Mᴇᴅɪᴀ",
-            description="Cʟɪᴄᴋ ᴛᴏ sᴀᴠᴇ ᴛʜᴇ sᴇʟғ-ᴅᴇsᴛʀᴜᴄᴛ/ᴛɪᴍᴇʀ ᴍᴇᴅɪᴀ ʏᴏᴜ ʀᴇᴘʟɪᴇᴅ ᴛᴏ.",
+            title="📥 Save Self-Destruct",
+            description="Click to save the Timer/View-Once media to YOUR Saved Messages.",
             thumb_url="https://graph.org/file/0b5a3406361a41552a92c.png",
-            
-            # This is the magic: It types the command for the Assistant to see
-            input_message_content=InputTextMessageContent(f".{COMMAND_TRIGGER}"),
+            input_message_content=InputTextMessageContent(f".{TRIGGER_CMD}"),
         )
     ]
-    
     await inline_query.answer(results, cache_time=0)
 
 
-# --- 2. ASSISTANT LOGIC (The Worker) ---
-# This runs on your Userbot (Assistant) to actually download the restricted media.
+# ==========================================
+#  2. MULTI-CLIENT LOGIC (The Workers)
+# ==========================================
 
-if assistants:
-    ub = assistants[0] # Use the first assistant
+async def start_saver_client(session_str, index):
+    """Starts a separate client for each string session"""
+    try:
+        # Create a unique client for this user
+        # We use :memory: for name to avoid creating .session files
+        cli = Client(
+            name=f"saver_agent_{index}",
+            api_id=API_ID,
+            api_hash=API_HASH,
+            session_string=session_str,
+            in_memory=True,
+        )
 
-    @ub.on_message(filters.command(COMMAND_TRIGGER, prefixes=".") & filters.me & filters.reply)
-    async def save_destruct_media(client, message: Message):
-        replied = message.reply_to_message
-        
-        # Check if there is any media to save
-        if not (replied.photo or replied.video or replied.video_note or replied.voice or replied.document or replied.audio):
-            return await message.edit_text("❌ <b>Please reply to a media file.</b>")
-        
-        # Indicate processing
-        status_msg = await message.edit_text("<b>⚡ Processing Self-Destruct Media...</b>")
-        
-        file_path = None
-        try:
-            # Download the media (Assistant can see timer media)
-            file_path = await client.download_media(replied)
-            
-            # Upload to Saved Messages ("me")
-            caption_text = f"<b>🔥 Saved Self-Destruct Media</b>\n<b>From:</b> {message.chat.title or 'Private Chat'}"
-            
-            if replied.photo:
-                await client.send_photo("me", photo=file_path, caption=caption_text)
-            elif replied.video:
-                await client.send_video("me", video=file_path, caption=caption_text)
-            elif replied.video_note:
-                await client.send_video_note("me", video_note=file_path)
-            elif replied.voice:
-                await client.send_voice("me", voice=file_path)
-            else:
-                await client.send_document("me", document=file_path, caption=caption_text)
-            
-            # Cleanup: Delete the command message and the local file
-            await status_msg.delete()
-            if os.path.exists(file_path):
-                os.remove(file_path)
+        # Register the Save Handler ONLY for this client
+        @cli.on_message(filters.command(TRIGGER_CMD, prefixes=".") & filters.me & filters.reply)
+        async def save_handler(client: Client, message: Message):
+            try:
+                # 1. Notify User
+                status = await message.edit_text("<b>⚡ Secure Saving...</b>")
                 
-        except Exception as e:
-            await status_msg.edit_text(f"❌ <b>Error:</b> `{e}`")
-            if file_path and os.path.exists(file_path):
-                os.remove(file_path)
+                replied = message.reply_to_message
+                
+                # 2. Check for Media
+                media_available = (
+                    replied.photo or 
+                    replied.video or 
+                    replied.video_note or 
+                    replied.voice or 
+                    replied.document
+                )
+
+                if not media_available:
+                    return await status.edit_text("❌ <b>No Media Found!</b>")
+
+                # 3. Download (Works because 'client' IS the user)
+                file_path = await client.download_media(replied)
+                
+                # 4. Save to 'Saved Messages'
+                caption = f"<b>🔥 Saved via Bot</b>\n<b>Source:</b> {message.chat.first_name or 'Private Chat'}"
+                
+                if replied.photo:
+                    await client.send_photo("me", photo=file_path, caption=caption)
+                elif replied.video:
+                    await client.send_video("me", video=file_path, caption=caption)
+                elif replied.video_note:
+                    await client.send_video_note("me", video_note=file_path)
+                elif replied.voice:
+                    await client.send_voice("me", voice=file_path)
+                else:
+                    await client.send_document("me", document=file_path, caption=caption)
+                
+                # 5. Cleanup
+                await status.delete()
+                if os.path.exists(file_path):
+                    os.remove(file_path)
+
+            except Exception as e:
+                # Fail gracefully
+                if "status" in locals():
+                    await status.edit_text(f"❌ Error: {e}")
+                if "file_path" in locals() and file_path and os.path.exists(file_path):
+                    os.remove(file_path)
+
+        # Start the client
+        await cli.start()
+        print(f"[Saver Module] Client {index} Started Successfully!")
+        
+    except Exception as e:
+        print(f"[Saver Module] Failed to start Client {index}: {e}")
+
+# ==========================================
+#  3. INITIALIZATION LOOP
+# ==========================================
+async def init_all_savers():
+    # Loop through the list and start all clients
+    tasks = []
+    for idx, session in enumerate(USER_STRINGS):
+        if session:
+            tasks.append(start_saver_client(session, idx + 1))
+    
+    await asyncio.gather(*tasks)
+
+# Hook into the event loop to start these clients when the bot runs
+if USER_STRINGS:
+    asyncio.create_task(init_all_savers())
