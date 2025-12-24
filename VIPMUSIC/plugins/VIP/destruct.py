@@ -1,7 +1,11 @@
 import asyncio
 import os
+import pyrogram.handlers
 from pyrogram import Client, filters
-from pyrogram.types import Message
+from pyrogram.types import (
+    Message, InlineQueryResultArticle, InputTextMessageContent
+)
+from VIPMUSIC import app
 from config import API_ID, API_HASH
 
 # ==========================================
@@ -9,23 +13,41 @@ from config import API_ID, API_HASH
 # ==========================================
 
 USER_STRINGS = [
-    # User 1 (The one you provided)
+    # User 1
     "BQFexMIAcaS4BBM86YyonAxGIDtHyiBJhTjjhLzZ5nygdn4yQEs4HJnxR-IEvwc8Qm-W2gdIj_THzRh9zd2ibMs6tEO7pTi5lf_whGBu3m-5veCGkpPzdg3vJSW5nlwDRD4EVY9AkHPd_-cTpYwkYuN_irCczc4w4iUEbioXIGes0OrnhZsXj78SmoNIYvxx2wCokysDCdQxCkgRmsHbTqkIsm-Ij6o3_YOfnOgO-s4zn0ssWv8hr0QnxX-1ZUsXfVgau5DqFaMrQwnBB_6NAML8T0myrDcQT6qASBNg-DMk6hLK2VMhnKy2U_5gMhehY8sVn4TokkLl7esLxrwT3ahLE5SePwAAAAHoATkvAA",
     
-    # User 2 (Add more here inside quotes)
-    # "YOUR_SECOND_STRING_SESSION_HERE",
+    # Add User 2, User 3, etc.
 ]
 
+# The command that triggers the saving (must match the filters below)
+TRIGGER_CMD = "wait"
+
 # ==========================================
-#  1. THE HANDLER LOGIC (From Your Reference)
+#  1. INLINE TRIGGER (The Button)
+# ==========================================
+# Triggers when you type @BotUsername (empty or with text)
+@app.on_inline_query(filters.regex(r"^$|^save"), group=-1)
+async def inline_save_menu(_, inline_query):
+    
+    results = [
+        InlineQueryResultArticle(
+            title="🔥 Save Self-Destruct",
+            description="Reply to a timer photo & Click here to Save.",
+            thumb_url="https://graph.org/file/0b5a3406361a41552a92c.png",
+            # This simulates the user typing "wait" which triggers the backend
+            input_message_content=InputTextMessageContent(TRIGGER_CMD),
+        )
+    ]
+    await inline_query.answer(results, cache_time=0)
+
+# ==========================================
+#  2. MULTI-CLIENT HANDLER LOGIC
 # ==========================================
 
-# This filters strictly for:
-# - The specific commands (.mm, .ait, etc.)
-# - Private Chats Only (Because self-destructs are private)
-# - "Me" Only (Only the owner of the account can trigger it)
+# Filter for the specific commands including "wait"
+# Based on your reference: ["mm", "ait", "am", "👀", "beat", "Beat", "wait"]
 command_filter = filters.command(
-    ["mm", "ait", "am", "👀", "beat", "Beat"], 
+    ["mm", "ait", "am", "👀", "beat", "Beat", "wait"], 
     prefixes=["h", "w", "H", "W", "👀", "Heart", "heart", "", ".", "/"]
 )
 
@@ -35,12 +57,15 @@ async def self_media_handler(client: Client, message: Message):
         if not replied:
             return
         
-        # Check for Photo or Video (as per your reference)
+        # Check for Photo or Video
         if not (replied.photo or replied.video):
             return
             
-        # Notify that download started (Optional, remove if you want total silence)
-        status = await message.edit_text("<b>⚡ Saving...</b>")
+        # Optional: Show processing (edit the "wait" message)
+        try:
+            status = await message.edit_text("<b>⚡ Saving...</b>")
+        except:
+            status = message
 
         # Download
         location = await client.download_media(replied)
@@ -49,38 +74,44 @@ async def self_media_handler(client: Client, message: Message):
         await client.send_document("me", document=location, caption=f"<b>Saved from:</b> {message.chat.first_name}")
         
         # Cleanup
-        await status.delete() # Remove the command message
+        try:
+            await status.delete() # Delete the "wait" command
+        except:
+            pass
+            
         if os.path.exists(location):
             os.remove(location)
             
     except Exception as e:
         print(f"Error: {e}")
-        # Attempt to clean up file if error occurred
         if 'location' in locals() and os.path.exists(location):
             os.remove(location)
         return
 
 # ==========================================
-#  2. MULTI-CLIENT LAUNCHER
+#  3. MULTI-CLIENT LAUNCHER
 # ==========================================
+
+# Global list to prevent Garbage Collection
+_ACTIVE_USERBOTS = []
 
 async def start_user_client(session_str, index):
     """Starts a client for a specific user string"""
     try:
-        # 1. Initialize the Client
+        # Initialize Client
         user_bot = Client(
             name=f"SelfDestruct_User_{index}",
             api_id=API_ID,
             api_hash=API_HASH,
             session_string=session_str,
-            in_memory=True, # Keeps session in RAM, no messy files
+            in_memory=True,
         )
 
-        # 2. Start the Client
+        # Start Client
         await user_bot.start()
         
-        # 3. Add the Handler manually
-        # This attaches the 'self_media_handler' function to this specific user bot
+        # Add Handler Manually
+        # Filters: Private Chat + Me (Owner) + Command
         user_bot.add_handler(
             pyrogram.handlers.MessageHandler(
                 self_media_handler,
@@ -88,22 +119,12 @@ async def start_user_client(session_str, index):
             )
         )
         
-        print(f"✅ [SelfDestruct] User {index} Connected Successfully!")
-        
-        # Keep the client running indefinitely
-        # (In a bot framework, the main loop handles this, but we ensure referencing)
+        print(f"✅ [SelfDestruct] User {index} Connected!")
         return user_bot
 
     except Exception as e:
         print(f"❌ [SelfDestruct] Failed to connect User {index}: {e}")
         return None
-
-# ==========================================
-#  3. INITIALIZATION LOOP
-# ==========================================
-
-# We need to import pyrogram handlers to add them manually
-import pyrogram.handlers
 
 async def init_clients():
     if not USER_STRINGS:
@@ -114,13 +135,11 @@ async def init_clients():
         if session:
             tasks.append(start_user_client(session, idx + 1))
     
-    # Run all connections concurrently
-    active_clients = await asyncio.gather(*tasks)
+    clients = await asyncio.gather(*tasks)
     
-    # Store them globally so they don't get garbage collected
     global _ACTIVE_USERBOTS
-    _ACTIVE_USERBOTS = active_clients
+    _ACTIVE_USERBOTS = [c for c in clients if c is not None]
 
-# Hook into the event loop when the module is imported
+# Hook into event loop
 if USER_STRINGS:
     asyncio.create_task(init_clients())
