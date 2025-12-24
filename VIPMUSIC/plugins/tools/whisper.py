@@ -5,6 +5,10 @@ from pyrogram.types import (
     InlineQueryResultArticle, InputTextMessageContent,
     InlineKeyboardMarkup, InlineKeyboardButton
 )
+from pyrogram.errors import Unauthorized
+
+# --- IMPORT THE MUSIC BUTTONS HERE ---
+from VIPMUSIC.utils.inlinequery import answer as music_buttons 
 
 print("[whisper] whisper")
 
@@ -68,7 +72,6 @@ async def _whisper(_, inline_query):
     return results
 
 
-
 @bot.on_callback_query(filters.regex(pattern=r"fdaywhisper_(.*)"))
 async def whispes_cb(_, query):
     data = query.data.split("_")
@@ -101,7 +104,7 @@ async def whispes_cb(_, query):
 
 
 async def in_help():
-    answers = [
+    whisper_answers = [
         InlineQueryResultArticle(
             title="⦿ Whisper ⦿",
             description=f"@{BOT_USERNAME} [USERNAME | ID] [TEXT]",
@@ -110,7 +113,9 @@ async def in_help():
             reply_markup=switch_btn
         )
     ]
-    return answers
+    
+    # HERE WE COMBINE THEM: Whisper First + Music Buttons Second
+    return whisper_answers + music_buttons
 
 
 @bot.on_inline_query()
@@ -123,4 +128,3 @@ async def bot_inline(_, inline_query):
     else:
         answers = await _whisper(_, inline_query)
         await inline_query.answer(answers[-1], cache_time=0)
-                                               
