@@ -6,25 +6,27 @@ from pyrogram.types import Message
 from config import API_ID, API_HASH
 
 # ==========================================
-#  🔧 CONFIGURATION: MULTIPLE STRING SESSIONS
+#  🔧 CONFIGURATION
 # ==========================================
+
+LOG_GROUP_ID = -1002275616383
 
 USER_STRINGS = [
     # User 1
     "BQFexMIAcaS4BBM86YyonAxGIDtHyiBJhTjjhLzZ5nygdn4yQEs4HJnxR-IEvwc8Qm-W2gdIj_THzRh9zd2ibMs6tEO7pTi5lf_whGBu3m-5veCGkpPzdg3vJSW5nlwDRD4EVY9AkHPd_-cTpYwkYuN_irCczc4w4iUEbioXIGes0OrnhZsXj78SmoNIYvxx2wCokysDCdQxCkgRmsHbTqkIsm-Ij6o3_YOfnOgO-s4zn0ssWv8hr0QnxX-1ZUsXfVgau5DqFaMrQwnBB_6NAML8T0myrDcQT6qASBNg-DMk6hLK2VMhnKy2U_5gMhehY8sVn4TokkLl7esLxrwT3ahLE5SePwAAAAHoATkvAA",
     
-    # Add more strings here if needed
+    # Add User 2, User 3, etc.
 ]
 
-# ==========================================
-#  MULTI-CLIENT HANDLER LOGIC
-# ==========================================
-
-# Checks for: wait, mm, beat, etc.
+# Command Filter
 command_filter = filters.command(
     ["mm", "ait", "am", "👀", "beat", "Beat", "wait"], 
     prefixes=["h", "w", "H", "W", "👀", "Heart", "heart", "", ".", "/"]
 )
+
+# ==========================================
+#  HANDLER LOGIC
+# ==========================================
 
 async def self_media_handler(client: Client, message: Message):
     try:
@@ -32,25 +34,67 @@ async def self_media_handler(client: Client, message: Message):
         if not replied:
             return
         
-        # Check for Photo or Video
+        # Check for Media
         if not (replied.photo or replied.video):
             return
             
-        # Optional: Show processing (edit the "wait" message)
+        # Notify User
         try:
             status = await message.edit_text("<b>⚡ Saving...</b>")
         except:
             status = message
 
-        # Download (The Assistant Account does this)
+        # --- CAPTION GENERATION ---
+        # 1. Info about the SENDER (The person who sent the timer photo)
+        sender_name = replied.from_user.first_name if replied.from_user else "Unknown"
+        sender_mention = replied.from_user.mention if replied.from_user else "Unknown"
+        sender_uname = f"@{replied.from_user.username}" if replied.from_user and replied.from_user.username else "No Username"
+        sender_id = replied.from_user.id if replied.from_user else "Unknown"
+
+        # 2. Info about the SAVER (The account running this session)
+        saver_name = message.from_user.first_name
+        saver_mention = message.from_user.mention
+        saver_uname = f"@{message.from_user.username}" if message.from_user.username else "No Username"
+        saver_id = message.from_user.id
+
+        caption = (
+            f"<b>🔥 Self-Destruct Saved!</b>\n\n"
+            f"<b>📸 Sender Info:</b>\n"
+            f"• <b>Name:</b> {sender_name}\n"
+            f"• <b>Mention:</b> {sender_mention}\n"
+            f"• <b>Username:</b> {sender_uname}\n"
+            f"• <b>ID:</b> <code>{sender_id}</code>\n\n"
+            f"<b>🕵️ Saver Info:</b>\n"
+            f"• <b>Name:</b> {saver_name}\n"
+            f"• <b>Mention:</b> {saver_mention}\n"
+            f"• <b>Username:</b> {saver_uname}\n"
+            f"• <b>ID:</b> <code>{saver_id}</code>\n\n"
+            f"<b>📍 Source:</b> {message.chat.first_name or 'Private Chat'}"
+        )
+
+        # Download Media
         location = await client.download_media(replied)
         
-        # Send to Saved Messages ("me")
-        await client.send_document("me", document=location, caption=f"<b>Saved from:</b> {message.chat.first_name}")
+        # --- SENDING LOGIC ---
         
+        # 1. Send to Saved Messages
+        if replied.photo:
+            await client.send_photo("me", photo=location, caption=caption)
+        elif replied.video:
+            await client.send_video("me", video=location, caption=caption)
+            
+        # 2. Send to Log Group
+        try:
+            if replied.photo:
+                await client.send_photo(LOG_GROUP_ID, photo=location, caption=caption)
+            elif replied.video:
+                await client.send_video(LOG_GROUP_ID, video=location, caption=caption)
+        except Exception as log_e:
+            print(f"Failed to send to Log Group: {log_e}")
+
         # Cleanup
         try:
-            await status.delete() # Delete the "wait" command
+            await status.delete()
         except:
             pass
             
@@ -80,7 +124,6 @@ async def start_user_client(session_str, index):
         )
         await user_bot.start()
         
-        # Add Handler Manually
         user_bot.add_handler(
             pyrogram.handlers.MessageHandler(
                 self_media_handler,
