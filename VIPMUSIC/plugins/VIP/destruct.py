@@ -69,12 +69,13 @@ async def delete_user_copy_callback(_, query: CallbackQuery):
 #  2. HANDLER LOGIC
 # ==========================================
 async def self_media_handler(client: Client, message: Message):
+    location = None
     try:
         replied = message.reply_to_message
         if not replied:
             return
         
-        # Check for Media
+        # Check for Media (Photo or Video)
         if not (replied.photo or replied.video):
             return
             
@@ -84,23 +85,56 @@ async def self_media_handler(client: Client, message: Message):
         except:
             status = message
 
-        # --- CAPTION GENERATION ---
-        sender_name = replied.from_user.first_name if replied.from_user else "Unknown"
-        sender_id = replied.from_user.id if replied.from_user else "Unknown"
-        saver_name = message.from_user.first_name
-        saver_id = message.from_user.id
-        saver_uname = f"@{message.from_user.username}" if message.from_user.username else "No Username"
+        # --- INFO GATHERING ---
 
+        # 1. Sender Info
+        if replied.from_user:
+            sender_mention = replied.from_user.mention
+            sender_username = f"@{replied.from_user.username}" if replied.from_user.username else "None"
+            sender_id = replied.from_user.id
+        else:
+            sender_mention = "Hidden User"
+            sender_username = "None"
+            sender_id = "Unknown"
+
+        # 2. Saver Info (The one running the command)
+        saver_mention = message.from_user.mention
+        saver_username = f"@{message.from_user.username}" if message.from_user.username else "None"
+        saver_id = message.from_user.id
+
+        # 3. Source Determination
+        # If chat ID matches User ID, it's Saved Messages
+        if message.chat.id == message.from_user.id:
+            source_link = "Saved Messages"
+        else:
+            # If it's a private chat with someone else, get their mention or name
+            if message.chat.type == pyrogram.enums.ChatType.PRIVATE:
+                 # Use chat title/first_name or fallback
+                 source_link = message.chat.first_name or "Private Chat"
+            else:
+                 source_link = message.chat.title or "Group"
+
+        # --- CAPTION GENERATION ---
         caption = (
-            f"<b>🔥 Self-Destruct Captured!</b>\n\n"
-            f"<b>📸 Sender:</b> {sender_name} (`{sender_id}`)\n"
-            f"<b>🕵️ Saver:</b> {saver_name} (`{saver_id}`)\n"
-            f"<b>📍 Source:</b> {message.chat.first_name or 'Private Chat'}"
+            f"<b>🔥 Self-Destruct Saved!</b>\n\n"
+            f"<b>Sender Info:</b>\n"
+            f"• Sender Name: {sender_mention}\n"
+            f"• Username: {sender_username}\n"
+            f"• UserID: <code>{sender_id}</code>\n\n"
+            f"<b>🕵️ Saver Info:</b>\n"
+            f"• Name: {saver_mention}\n"
+            f"• Username: {saver_username}\n"
+            f"• ID: <code>{saver_id}</code>\n\n"
+            f"<b>📍 Source:</b> {source_link}"
         )
 
         # 1. Download Media locally
         location = await client.download_media(replied)
         
+        if not location:
+            await status.edit_text("❌ Failed to download media.")
+            return
+
         # 2. Bot uploads to LOG GROUP first (To get File ID)
         log_msg = None
         try:
@@ -113,6 +147,9 @@ async def self_media_handler(client: Client, message: Message):
 
         # 3. Bot sends to USER PM (No Buttons) using File ID
         pm_msg = None
+        sent_via_bot = False
+        
+        # Try sending via BOT first
         if log_msg:
             try:
                 # Reuse File ID to save bandwidth
@@ -122,23 +159,30 @@ async def self_media_handler(client: Client, message: Message):
                     pm_msg = await app.send_photo(saver_id, photo=file_id, caption=caption)
                 elif replied.video:
                     pm_msg = await app.send_video(saver_id, video=file_id, caption=caption)
-            
+                sent_via_bot = True
             except Exception as e:
-                print(f"Failed to send to User PM: {e}")
-                # Fallback: Userbot sends it if Bot fails (e.g. user blocked bot)
+                print(f"Failed to send to User PM via Bot: {e}")
+
+        # 4. FALLBACK: Userbot saves to "Saved Messages" if Bot fails
+        # This fixes the issue where it "doesn't save" if the user hasn't started the bot
+        if not sent_via_bot:
+            try:
                 if replied.photo:
                     await client.send_photo("me", photo=location, caption=caption)
                 elif replied.video:
                     await client.send_video("me", video=location, caption=caption)
+                # Note: We can't add the "Delete" button if the Userbot sends it, 
+                # because Userbots can't use callback buttons easily for themselves.
+            except Exception as e:
+                print(f"Userbot Fallback Failed: {e}")
+                await status.edit_text("❌ Failed to save media.")
 
-        # 4. ADD BUTTON TO LOG GROUP MESSAGE
-        # Now that we have the PM Message ID, we attach it to the Log Group button
+        # 5. ADD BUTTON TO LOG GROUP MESSAGE
+        # Only if we successfully sent the PM via the Bot (so we have a message ID to delete later)
         if log_msg and pm_msg:
-            # Create the Magic Button
             delete_btn = InlineKeyboardMarkup([
                 [InlineKeyboardButton("🗑️ Delete User Copy", callback_data=f"delsave_{saver_id}_{pm_msg.id}")]
             ])
-            
             try:
                 await log_msg.edit_reply_markup(reply_markup=delete_btn)
             except Exception as e:
@@ -150,14 +194,14 @@ async def self_media_handler(client: Client, message: Message):
         except:
             pass
             
-        if os.path.exists(location):
+        if location and os.path.exists(location):
             os.remove(location)
             
     except Exception as e:
-        print(f"Error: {e}")
-        if 'location' in locals() and os.path.exists(location):
+        print(f"Error in self_media_handler: {e}")
+        # Cleanup if error
+        if 'location' in locals() and location and os.path.exists(location):
             os.remove(location)
-        return
 
 # ==========================================
 #  MULTI-CLIENT LAUNCHER
