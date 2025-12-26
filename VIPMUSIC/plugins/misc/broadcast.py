@@ -4,7 +4,6 @@ from pyrogram import filters
 from pyrogram.enums import ChatMembersFilter
 from pyrogram.errors import FloodWait
 
-# Changed from ShrutiMusic to VIPMUSIC
 from VIPMUSIC import app
 from VIPMUSIC.misc import SUDOERS
 from VIPMUSIC.utils.database import (
@@ -34,10 +33,11 @@ IS_BROADCASTING = False
 # ==========================================
 # BROADCAST HANDLER
 # ==========================================
-
-@app.on_message(filters.command("broadcast","gcast") & (filters.user(BROADCAST_ID) | SUDOERS))
+# FIX: Added group=-1 to run BEFORE chatbot/ranking modules
+# FIX: Changed command syntax to ["broadcast", "gcast"] so both work
+@app.on_message(filters.command(["broadcast", "gcast"]) & (filters.user(BROADCAST_ID) | SUDOERS), group=-1)
 @language
-async def braodcast_message(client, message, _):
+async def broadcast_message(client, message, _):
     global IS_BROADCASTING
 
     if IS_BROADCASTING:
@@ -153,7 +153,6 @@ async def braodcast_message(client, message, _):
     # =====================================
 
     if "-assistant" in message.text:
-        # Changed import here as well
         from VIPMUSIC.core.userbot import assistants
 
         text = "🤖 **Assistant Broadcast Report**\n\n"
@@ -185,7 +184,7 @@ async def braodcast_message(client, message, _):
 
 
 # ==========================================
-# AUTO CLEAN (UNCHANGED)
+# AUTO CLEAN
 # ==========================================
 
 async def auto_clean():
