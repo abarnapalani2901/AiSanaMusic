@@ -1,92 +1,173 @@
+# VIPMUSIC/plugins/tools/telegraph.py
+
 import os
+import asyncio
+import requests
 from datetime import datetime
-from telethon import Button
-
 from PIL import Image
-from telegraph import Telegraph, exceptions, upload_file
+from telegraph import Telegraph, upload_file, exceptions
 
-from VIPMUSIC import telethn as tbot
-from VIPMUSIC.utils.events import register
-print("[telegraph] tgt")
+from pyrogram import filters
+from pyrogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 
-VIP = "Vip"
-TMP_DOWNLOAD_DIRECTORY = "./"
+from VIPMUSIC import app
+from config import BANNED_USERS
+
+# ---------------- CONFIGURATION ---------------- #
+VIP = "VIPMUSIC"
 telegraph = Telegraph(domain="graph.org")
 r = telegraph.create_account(short_name=VIP)
 auth_url = r["auth_url"]
 
+# Imgur Client ID (Generic Public ID)
+IMGUR_CLIENT_ID = "5d42a2e5b19fe1d" 
 
-@register(pattern="^/tg(t|m) ?(.*)")
-async def _(event):
-    if event.fwd_from:
-        return
-    optional_title = event.pattern_match.group(2)
-    if event.reply_to_msg_id:
+# ---------------- HELPER ---------------- #
+def resize_image(image_path):
+    """Converts WebP/Stickers to PNG for Telegraph/Imgur support."""
+    try:
+        im = Image.open(image_path)
+        im.save(image_path, "PNG")
+    except Exception as e:
+        print(f"Resize Error: {e}")
+
+# ---------------- TELEGRAPH COMMANDS ---------------- #
+@app.on_message(filters.command(["tgm", "tgt", "telegraph", "tl"], prefixes=["/", "!", ".", ",",]) & ~BANNED_USERS)
+async def telegraph_upload(client, message):
+    if not message.reply_to_message:
+        return await message.reply_text("⚠️ **Reply to a message or media!**")
+
+    cmd = message.command[0].lower()
+    
+    # --- MEDIA UPLOAD (/tgm) ---
+    if cmd in ["tgm", "telegraph", "tl"]:
+        if not message.reply_to_message.media:
+            return await message.reply_text("❌ **Please reply to an image or video/gif.**")
+
+        msg = await message.reply_text("<code>📥 Downloading...</code>")
         start = datetime.now()
-        r_message = await event.get_reply_message()
-        input_str = event.pattern_match.group(1)
-        if input_str == "t":
-            downloaded_file_name = await tbot.download_media(
-                r_message, TMP_DOWNLOAD_DIRECTORY
-            )
+        local_path = None
+
+        try:
+            local_path = await message.reply_to_message.download()
+            
+            if local_path.endswith((".webp", ".tgs")):
+                resize_image(local_path)
+
+            await msg.edit_text("<code>📤 Uploading to Telegraph...</code>")
+            
+            upload_path = upload_file(local_path)
+            url = f"https://graph.org{upload_path[0]}"
+            
             end = datetime.now()
             ms = (end - start).seconds
-            h = await event.reply(
-                "Downloaded to {} in {} seconds.".format(downloaded_file_name, ms)
-            )
-            if downloaded_file_name.endswith((".webp")):
-                resize_image(downloaded_file_name)
-            try:
-                start = datetime.now()
-                media_urls = upload_file(downloaded_file_name)
-            except exceptions.TelegraphException as exc:
-                await h.edit("ERROR: " + str(exc))
-                os.remove(downloaded_file_name)
-            else:
-                end = datetime.now()
-                (end - start).seconds
-                os.remove(downloaded_file_name)
-                button = Button.url("ᴛᴇʟᴇɢʀᴀᴘʜ", f"https://graph.org{media_urls[0]}")
-                await h.edit(
-                    "ᴜᴘʟᴏᴀᴅᴇᴅ ᴛᴏ [ᴛᴇʟᴇɢʀᴀᴘʜ](https://graph.org{})".format(
-                        media_urls[0]
-                    ),
-                    link_preview=True,
-                    buttons=button,
-                )
 
-        elif input_str == "m":
-            user_object = await tbot.get_entity(r_message.sender_id)
-            title_of_page = user_object.first_name
-            if optional_title:
-                title_of_page = optional_title
-            page_content = r_message.message
-            if r_message.media:
-                if page_content != "":
-                    title_of_page = page_content
-                downloaded_file_name = await tbot.download_media(
-                    r_message, TMP_DOWNLOAD_DIRECTORY
+            await msg.edit_text(
+                f"✅ **Uploaded to Telegraph!**\n\n"
+                f"🔗 **Link:** [Click Here]({url})\n"
+                f"⏱ **Time:** `{ms}s`",
+                reply_markup=InlineKeyboardMarkup(
+                    [[InlineKeyboardButton("🔗 Open Link", url=url)]]
                 )
-                m_list = None
-                with open(downloaded_file_name, "rb") as fd:
-                    m_list = fd.readlines()
-                for m in m_list:
-                    page_content += m.decode("UTF-8") + "\n"
-                os.remove(downloaded_file_name)
+            )
+
+        except exceptions.TelegraphException as exc:
+            await msg.edit_text(f"❌ **Telegraph Error:** `{exc}`")
+        except Exception as e:
+            await msg.edit_text(f"❌ **Error:** `{e}`")
+        finally:
+            if local_path and os.path.exists(local_path):
+                os.remove(local_path)
+
+    # --- TEXT UPLOAD (/tgt) ---
+    elif cmd == "tgt":
+        msg = await message.reply_text("<code>📝 Creating page...</code>")
+        
+        page_content = message.reply_to_message.text or message.reply_to_message.caption
+        if not page_content:
+            return await msg.edit_text("❌ **Please reply to a text message.**")
+
+        title = "VIPMUSIC Paste"
+        if len(message.command) > 1:
+            title = message.text.split(None, 1)[1]
+        elif message.from_user:
+            title = f"{message.from_user.first_name}'s Paste"
+
+        try:
             page_content = page_content.replace("\n", "<br>")
-            response = telegraph.create_page(title_of_page, html_content=page_content)
+            response = telegraph.create_page(title=title, html_content=page_content)
+            url = f"https://graph.org/{response['path']}"
+
+            await msg.edit_text(
+                f"✅ **Page Created!**\n\n"
+                f"📄 **Title:** `{title}`\n"
+                f"🔗 **Link:** [Click Here]({url})",
+                reply_markup=InlineKeyboardMarkup(
+                    [[InlineKeyboardButton("🔗 Open Page", url=url)]]
+                )
+            )
+            
+        except Exception as e:
+            await msg.edit_text(f"❌ **Error:** `{e}`")
+
+
+# ---------------- IMGUR COMMAND ---------------- #
+@app.on_message(filters.command(["imgur", "ig"], prefixes=["/", "!", ".", ",",]) & ~BANNED_USERS)
+async def imgur_upload(client, message):
+    if not message.reply_to_message:
+        return await message.reply_text("⚠️ **Reply to an image/video to upload to Imgur!**")
+    
+    if not message.reply_to_message.media:
+        return await message.reply_text("❌ **Please reply to media.**")
+
+    msg = await message.reply_text("<code>📥 Downloading...</code>")
+    start = datetime.now()
+    local_path = None
+
+    try:
+        local_path = await message.reply_to_message.download()
+        
+        if local_path.endswith((".webp", ".tgs")):
+            resize_image(local_path)
+
+        await msg.edit_text("<code>📤 Uploading to Imgur...</code>")
+
+        # Imgur API Call
+        headers = {'Authorization': f'Client-ID {IMGUR_CLIENT_ID}'}
+        data = {'type': 'file', 'title': 'Uploaded by VIPMUSIC', 'description': 'Uploaded via Pyrogram Bot'}
+        
+        # We run the blocking request in a separate thread to avoid lag
+        def upload_request():
+            with open(local_path, 'rb') as img_file:
+                return requests.post(
+                    "https://api.imgur.com/3/image",
+                    headers=headers,
+                    files={'image': img_file},
+                    data=data
+                )
+        
+        response = await asyncio.to_thread(upload_request)
+        result = response.json()
+
+        if response.status_code == 200 and result['success']:
+            link = result['data']['link']
             end = datetime.now()
             ms = (end - start).seconds
-            await event.reply(
-                "ᴘᴀsᴛᴇᴅ ᴛᴏ https://graph.org/{} ɪɴ {} sᴇᴄᴏɴᴅs".format(
-                    response["path"], ms
-                ),
-                link_preview=True,
+            
+            await msg.edit_text(
+                f"✅ **Uploaded to Imgur!**\n\n"
+                f"🔗 **Link:** [Click Here]({link})\n"
+                f"⏱ **Time:** `{ms}s`",
+                reply_markup=InlineKeyboardMarkup(
+                    [[InlineKeyboardButton("🔗 Open Link", url=link)]]
+                )
             )
-    else:
-        await event.reply("Rᴇᴘʟʏ ᴛᴏ ᴀ ᴍᴇssᴀɢᴇ ᴛᴏ ɢᴇᴛ ᴀ ᴘᴇʀᴍᴀɴᴇɴᴛ ᴛᴇʟᴇɢʀᴀᴘʜ ʟɪɴᴋ.")
+        else:
+            error_msg = result.get('data', {}).get('error', 'Unknown Error')
+            await msg.edit_text(f"❌ **Imgur Failed:** `{error_msg}`")
 
-
-def resize_image(image):
-    im = Image.open(image)
-    im.save(image, "PNG")
+    except Exception as e:
+        await msg.edit_text(f"❌ **Error:** `{e}`")
+    finally:
+        if local_path and os.path.exists(local_path):
+            os.remove(local_path)
