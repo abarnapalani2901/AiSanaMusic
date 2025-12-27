@@ -33,7 +33,7 @@ if not MONGO_URL:
 print("[joinreq] joinreq, approveall")
 
 mongo = motor.motor_asyncio.AsyncIOMotorClient(MONGO_URL)
-db = mongo.get_database("ghosttreq")
+db = mongo.get_database("ghosttjoinreq")
 settings_coll = db.get_collection("join_request_settings")
 
 # Temporary in-memory states (admin decline reason prompts)
