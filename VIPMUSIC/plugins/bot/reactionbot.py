@@ -152,17 +152,15 @@ async def react_command(client, message: Message):
     
     kb = InlineKeyboardMarkup([
         [
-            InlineKeyboardButton("🍏 Enable Auto-React", callback_data=f"react_chat_on:{chat_id}"),
-            InlineKeyboardButton("🍎 Disable Auto-React", callback_data=f"react_chat_off:{chat_id}")
+            InlineKeyboardButton("🍏 𝐄ɴᴀʙʟᴇ", callback_data=f"react_chat_on:{chat_id}"),
+            InlineKeyboardButton("🍎 𝐃ɪsᴀʙʟᴇ", callback_data=f"react_chat_off:{chat_id}")
         ]
     ])
     
     status_text = "🍏 𝐄ɴᴀʙʟᴇᴅ" if enabled else "🍎 𝐃ɪsᴀʙʟᴇᴅ"
     await message.reply_text(
-        f"**🧩 Reaction Settings**\n\n"
+        f"**Reaction Settings**\n\n"
         f"**Auto-Reaction:** {status_text}\n"
-        f"__Note: Mention triggers ({len(custom_mentions)}) are ALWAYS enabled.__",
-        reply_markup=kb
     )
 
 
