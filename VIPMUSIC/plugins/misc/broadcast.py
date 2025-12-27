@@ -27,7 +27,7 @@ BROADCAST_ID = [
     6773435708,
 ]
 
-IS_BROADCASTING = False
+IS_BROADCASTING = True
 
 
 # ==========================================
