@@ -4,7 +4,9 @@ import requests
 import time
 import yt_dlp
 from time import time
-from youtubesearchpython import YoutubeSearch
+
+# FIX: Import from the correct library matching your code logic (.to_dict)
+from youtube_search import YoutubeSearch 
 
 from pyrogram import filters, Client
 from pyrogram.types import Message
@@ -56,7 +58,12 @@ async def download_song(client, message):
     ydl_ops = {"format": "bestaudio[ext=m4a]"}
     
     try:
+        # Using youtube_search library
         results = YoutubeSearch(query, max_results=1).to_dict()
+        if not results:
+            await m.edit("**⚠️ ɴᴏ ʀᴇsᴜʟᴛs ᴡᴇʀᴇ ғᴏᴜɴᴅ. ᴍᴀᴋᴇ sᴜʀᴇ ʏᴏᴜ ᴛʏᴘᴇᴅ ᴛʜᴇ ᴄᴏʀʀᴇᴄᴛ sᴏɴɢ ɴᴀᴍᴇ**")
+            return
+
         link = f"https://youtube.com{results[0]['url_suffix']}"
         title = results[0]["title"][:40]
         thumbnail = results[0]["thumbnails"][0]
@@ -76,6 +83,7 @@ async def download_song(client, message):
 
     await m.edit("**📥 ᴅᴏᴡɴʟᴏᴀᴅɪɴɢ...**")
     
+    audio_file = None
     try:
         with yt_dlp.YoutubeDL(ydl_ops) as ydl:
             info_dict = ydl.extract_info(link, download=False)
@@ -101,8 +109,9 @@ async def download_song(client, message):
         await m.edit(" - An error !!")
         print(e)
 
+    # Cleanup
     try:
-        if os.path.exists(audio_file):
+        if audio_file and os.path.exists(audio_file):
             os.remove(audio_file)
         if os.path.exists(thumb_name):
             os.remove(thumb_name)
@@ -114,7 +123,6 @@ async def download_song(client, message):
 
 @app.on_message(filters.command(["ig", "insta"], ["/", "!", "."]))
 async def download_instareels(client, message):
-    # FIX: Changed 'm' to 'message' in function definition
     if await check_spam(message):
         return
 
