@@ -1,5 +1,3 @@
-# VIPMUSIC/plugins/bot/chatbot.py
-
 import os
 import random
 import re
@@ -13,9 +11,7 @@ from pyrogram.types import (
     InlineKeyboardButton,
     CallbackQuery,
 )
-from pyrogram.errors import MessageEmpty
 from pyrogram.enums import ChatMemberStatus, ChatType
-
 from pymongo import MongoClient
 
 # -------------------- Application client -------------------- #
@@ -27,7 +23,7 @@ except Exception:
     except Exception:
         raise RuntimeError("Could not import Pyrogram Client as 'app'.")
 
-# -------------------- MongoDB setup -------------------- #
+# -------------------- MongoDB & Config setup -------------------- #
 try:
     from config import MONGO_DB_URI as MONGO_URL
     from VIPMUSIC.misc import SUDOERS
@@ -43,12 +39,24 @@ try:
 except:
     OWNER_ID = 0
 
+# -------------------- SUDOERS SANITIZATION (FIX CRASH) -------------------- #
+# Ensure SUDOERS only contains Integers (IDs), removing any objects/strings
+SUDO_IDS = []
+if SUDOERS:
+    for item in SUDOERS:
+        if isinstance(item, int):
+            SUDO_IDS.append(item)
+        elif hasattr(item, 'id'):  # If it's a User object
+            SUDO_IDS.append(item.id)
+SUDO_IDS.append(OWNER_ID)
+SUDO_IDS = list(set(SUDO_IDS)) # Remove duplicates
+
+# -------------------- Database Setup -------------------- #
 mongo = MongoClient(MONGO_URL)
 db = mongo.get_database("vipmusic_db")
 
 chatai_coll = db.get_collection("chatai")
 status_coll = db.get_collection("chatbot_status")
-lang_coll = db.get_collection("chat_langs")
 BLOCK_COLL = db.get_collection("blocked_words")  # GLOBAL BLOCKLIST
 
 # Runtime Caches
@@ -68,8 +76,8 @@ DEFAULT_BLOCKED = [
     "sunny", "call", "pm", "dm", "service", "ottha", "otta", "gommala",
     "hole", "inch", "ash", "sexchat", "onlyfans", "cams", "chatsex", "adultchat",
     "videochat", "sexting", "naked", "lingerie", "eroticvideo",
-    "/start", "/help", "/play", "/vplay", "/end", "/playforce", "/vplayforce", 
-    "/skip", "/pause", "/seek", "/loop", "/ban", "fban", "/warn", "/mute", 
+    "/start", "/help", "/play", "/vplay", "/end", "/playforce", "/vplayforce",
+    "/skip", "/pause", "/seek", "/loop", "/ban", "fban", "/warn", "/mute",
     "/unban", "/unfban", "/newfed", "/chatfed", "/fedstat", "/myfeds",
     "💦", "💧", "🍑", "🍒", "🍆", "🥵", "🍌", "💋", "👅",
 ]
@@ -115,7 +123,7 @@ def list_block_words():
 #                      ADMIN HELPERS
 # ============================================================
 async def is_user_admin(client, chat_id: int, user_id: int) -> bool:
-    if user_id == OWNER_ID or user_id in SUDOERS:
+    if user_id in SUDO_IDS:
         return True
     try:
         member = await client.get_chat_member(chat_id, user_id)
@@ -179,12 +187,12 @@ async def save_reply(original: Message, reply: Message):
 # ============================================================
 #             BLOCKLIST SUDO COMMANDS
 # ============================================================
-@app.on_message(filters.command("addblock", prefixes=["/", "!", "."]) & filters.user(SUDOERS))
+@app.on_message(filters.command("addblock", prefixes=["/", "!", "."]) & filters.user(SUDO_IDS))
 async def addblock_cmd(client, message):
-    text = message.text[len(message.command[0])+2:].strip()
-    if not text:
+    if len(message.command) < 2:
         return await message.reply_text("Usage:\n/addblock word1 word2 ...\n/addblock /regex/i")
 
+    text = message.text.split(None, 1)[1].strip()
     added_words = []
     errors = []
 
@@ -215,16 +223,17 @@ async def addblock_cmd(client, message):
     await message.reply_text(reply_text)
 
 
-@app.on_message(filters.command("rmblock", prefixes=["/", "!", "."]) & filters.user(SUDOERS))
+@app.on_message(filters.command("rmblock", prefixes=["/", "!", "."]) & filters.user(SUDO_IDS))
 async def rmblock_cmd(client, message):
-    text = message.text[len(message.command[0])+2:].strip()
-    if not text:
+    if len(message.command) < 2:
         return await message.reply_text("Usage: /rmblock <word or regex>")
+
+    text = message.text.split(None, 1)[1].strip()
     remove_block_word(text)
     await message.reply_text(f"🧹 Removed from blocklist: **{text}**")
 
 
-@app.on_message(filters.command("listblock", prefixes=["/", "!", "."]) & filters.user(SUDOERS))
+@app.on_message(filters.command("listblock", prefixes=["/", "!", "."]) & filters.user(SUDO_IDS))
 async def listblock_cmd(client, message):
     words = list_block_words()
     if not words:
