@@ -168,9 +168,9 @@ async def react_command(client, message: Message):
             InlineKeyboardButton("🍏 𝐄ɴᴀʙʟᴇ", callback_data=f"react_chat_on:{chat_id}"),
             InlineKeyboardButton("🍎 𝐃ɪsᴀʙʟᴇ", callback_data=f"react_chat_off:{chat_id}")
         ],
-        [
-            InlineKeyboardButton("🗑 Cʟᴇᴀʀ Sᴇᴛᴛɪɴɢs", callback_data=f"react_chat_clear:{chat_id}")
-        ]
+        #[
+            #InlineKeyboardButton("🗑 Cʟᴇᴀʀ Sᴇᴛᴛɪɴɢs", callback_data=f"react_chat_clear:{chat_id}")
+        #]
     ])
     
     status_text = "🍏 𝐄ɴᴀʙʟᴇᴅ" if enabled else "🍎 𝐃ɪsᴀʙʟᴇᴅ"
