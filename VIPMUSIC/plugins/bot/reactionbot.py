@@ -32,12 +32,22 @@ CHAT_REACTION_OVERRIDES: Dict[int, bool] = {} # per-chat override cache
 custom_mentions: Set[str] = set(x.lower().lstrip("@") for x in (MENTION_USERNAMES or []))
 
 # ---------------- VALID REACTIONS ----------------
+# Reduced list to the most stable standard emojis to avoid 400 Errors
 VALID_REACTIONS = {
-    "❤️", "💖", "💘", "💞", "💓", "✨", "🔥", "💫",
-    "💥", "🌸", "😍", "🥰", "💎", "🌙", "🌹", "😂",
-    "😎", "🤩", "😘", "😉", "🤭", "💐", "😻", "🥳",
-    "👍", "👎", "👏", "😁", "🤔", "😢", "🤯", "🤩", "🙏", "🎉"
+    "👍", "👎", "❤️", "🔥", "🥰", "👏", "😁", "🤔", 
+    "🤯", "😱", "🤬", "😢", "🎉", "🤩", "🤮", "💩",
+    "🙏", "👌", "🕊", "🤡", "🥱", "🥴", "😍", "🐳",
+    "❤", "🔥", "💔", "💯", "🤣", "⚡", "💘", "🏆",
+    "🍓", "🍾", "💋", "💘", "😈", "😴", "😭", "🤓",
+    "👻", "👨‍💻", "👀", "🎃", "🙈", "😇", "😨", "🤝",
+    "✍", "🤗", "🫡", "🎅", "🎄", "☃", "💅", "🤪",
+    "🗿", "🆒", "💘", "🙉", "🦄", "😘", "💊", "🙊",
+    "😎", "👾", "🤷‍♂", "🤷", "🤷‍♀", "😡"
 }
+
+SAFE_REACTIONS = [e for e in (START_REACTIONS or []) if e in VALID_REACTIONS]
+if not SAFE_REACTIONS:
+    SAFE_REACTIONS = list(VALID_REACTIONS)
 SAFE_REACTIONS = [e for e in (START_REACTIONS or []) if e in VALID_REACTIONS]
 if not SAFE_REACTIONS:
     SAFE_REACTIONS = list(VALID_REACTIONS)
@@ -318,8 +328,6 @@ async def reaction_watcher(client, message: Message):
     chat_id = message.chat.id
     
     # 2. Check Triggers (Mentions/Keywords)
-    # Triggers usually run even if auto-react is off, unless you want them off too.
-    # Current logic: If chat is disabled, NO reactions happen at all.
     if not is_reaction_enabled_for_chat(chat_id):
         return
 
@@ -341,7 +349,10 @@ async def reaction_watcher(client, message: Message):
     # Check matches in Entities
     for u in mentioned_users:
         if u in custom_mentions:
-            await message.react(next_emoji(chat_id))
+            try:
+                await message.react(next_emoji(chat_id))
+            except Exception:
+                pass # Ignore invalid reactions
             triggered = True
             break
             
@@ -350,16 +361,17 @@ async def reaction_watcher(client, message: Message):
         words = message_words(text)
         for trig in custom_mentions:
             if trig in words or trig in text.lower():
-                await message.react(next_emoji(chat_id))
+                try:
+                    await message.react(next_emoji(chat_id))
+                except Exception:
+                    pass
                 triggered = True
                 break
 
     # 3. Auto-React (Random)
-    # Only if NOT triggered by specific word AND chat enabled
     if not triggered:
         if is_reaction_enabled_for_chat(chat_id):
             try:
-                # Optional: Add probability check here e.g. if random.random() > 0.5: return
                 await message.react(next_emoji(chat_id))
-            except:
+            except Exception:
                 pass
