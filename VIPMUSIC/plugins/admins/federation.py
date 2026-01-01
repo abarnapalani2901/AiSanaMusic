@@ -235,12 +235,16 @@ async def fed_chat(client, message):
 async def join_fed(client, message):
     if message.chat.type == ChatType.PRIVATE:
         return await message.reply_text("This command is specific to groups, not our pm!")
+    
+    # 1. Get the member info
     member = await client.get_chat_member(message.chat.id, message.from_user.id)
     fed_id_existing = await get_fed_id(int(message.chat.id))
-    # only group creator (owner) can join; allow global sudo/owner to bypass
-    if not (message.from_user.id in (await client.get_chat(message.chat.id)).creator or message.from_user.id in []):
-        # simpler check: member.status must be OWNER or the user is a global owner/sudo
-        pass
+
+    # --- FIX START: Removed the broken "creator" check ---
+    # The broken "if not (...).creator" block was removed here.
+    # The logic below correctly handles the "Owner Only" check.
+    # --- FIX END ---
+
     # Enforce: only chat owner can join normally
     if member.status != ChatMemberStatus.OWNER and message.from_user.id not in (int(OWNER_ID),):
         # allow sudo to skip check
@@ -251,8 +255,10 @@ async def join_fed(client, message):
             SUDO = []
         if message.from_user.id not in SUDO and message.from_user.id != int(OWNER_ID):
             return await message.reply_text("Only group creators can use this command!")
+            
     if fed_id_existing:
         return await message.reply_text("You cannot join two federations from one chat")
+        
     args = message.text.split(" ", 1)
     if len(args) > 1:
         fed_id = args[1].strip()
