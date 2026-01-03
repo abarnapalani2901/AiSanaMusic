@@ -17,22 +17,32 @@ from pyrogram.enums import ChatMemberStatus, ChatType
 from pymongo import MongoClient
 
 # -------------------- CONFIGURATION -------------------- #
-# Get this key from https://aistudio.google.com/app/apikey
-GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "AIzaSyCIFDjm0VwGqKJoFGjw6gnxlcPC-CQKCH8")
+# !!! CRITICAL: You must use a valid API Key from https://aistudio.google.com/app/apikey !!!
+# The default key below is a placeholder and will likely fail.
+GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "")
 
 # Configure Gemini
 if GEMINI_API_KEY:
     genai.configure(api_key=GEMINI_API_KEY)
-    # Safety settings to prevent blocking legitimate queries
+    
+    # UNRESTRICTED SAFETY SETTINGS
+    # This prevents the bot from blocking answers and falling back to "Thinking..."
     safety_settings = [
         {"category": "HARM_CATEGORY_HARASSMENT", "threshold": "BLOCK_NONE"},
         {"category": "HARM_CATEGORY_HATE_SPEECH", "threshold": "BLOCK_NONE"},
         {"category": "HARM_CATEGORY_SEXUALLY_EXPLICIT", "threshold": "BLOCK_NONE"},
         {"category": "HARM_CATEGORY_DANGEROUS_CONTENT", "threshold": "BLOCK_NONE"},
     ]
-    model = genai.GenerativeModel("gemini-pro", safety_settings=safety_settings)
+    
+    # Using 'gemini-1.5-flash' for speed and multi-language support
+    try:
+        model = genai.GenerativeModel("gemini-1.5-flash", safety_settings=safety_settings)
+    except Exception as e:
+        model = None
+        print(f"[FATAL ERROR] Could not load Gemini Model: {e}")
 else:
     model = None
+    print("[FATAL ERROR] GEMINI_API_KEY is missing! The bot will not reply.")
 
 # -------------------- Application Client -------------------- #
 try:
@@ -48,10 +58,8 @@ try:
     from config import MONGO_DB_URI as MONGO_URL
     from VIPMUSIC.misc import SUDOERS
 except Exception:
-    MONGO_URL = os.environ.get(
-        "MONGO_URL",
-        "mongodb+srv://iamnobita1:nobitamusic1@cluster0.k08op.mongodb.net/?retryWrites=true&w=majority"
-    )
+    # Fallback config if imports fail
+    MONGO_URL = os.environ.get("MONGO_URL", "")
     SUDOERS = []
 
 try:
@@ -74,7 +82,6 @@ SUDO_IDS = list(set(SUDO_IDS))
 mongo = MongoClient(MONGO_URL)
 db = mongo.get_database("vipmusic_db")
 
-# Removed chatai_coll (Learning DB) as requested
 status_coll = db.get_collection("chatbot_status")
 BLOCK_COLL = db.get_collection("blocked_words")
 
@@ -88,16 +95,9 @@ DEFAULT_BLOCKED = [
     "nipples", "xxx", "porno", "cum", "masturbate", "erotic", "adult", "playboy",
     "hentai", "erotica", "fetish", "kink", "orgasm", "threesome", "xnxx",
     "xvideos", "xvideo", "pic", "nudepic",
-    "punda", "koothi", "soothu", "sutthu", "mayiru", "olmari", "okka",
-    "poolu", "olu", "sappu", "umbe", "kuththu", "thappu", "suthu", "paalu",
-    "adangommala", "adangomala", "adangotha", "adangottha",
-    "sunny", "call", "pm", "dm", "service", "ottha", "otta", "gommala",
-    "hole", "inch", "ash", "sexchat", "onlyfans", "cams", "chatsex", "adultchat",
-    "videochat", "sexting", "naked", "lingerie", "eroticvideo",
     "/start", "/help", "/play", "/vplay", "/end", "/playforce", "/vplayforce",
     "/skip", "/pause", "/seek", "/loop", "/ban", "fban", "/warn", "/mute",
     "/unban", "/unfban", "/newfed", "/chatfed", "/fedstat", "/myfeds",
-    "💦", "💧", "🍑", "🍒", "🍆", "🥵", "🍌", "💋", "👅",
 ]
 
 # ===================== INITIALIZE BLOCKLIST ===================== #
@@ -142,24 +142,33 @@ async def is_user_admin(client, chat_id: int, user_id: int) -> bool:
 # ============================================================
 async def get_gemini_response(prompt: str):
     """
-    Fetches a response from Gemini Pro.
-    Returns None if API fails or key is missing.
+    Fetches a response from Gemini using a strict system prompt.
     """
     if not model:
+        print("[Gemini Error] Model is not initialized. Check API Key.")
         return None
     
     try:
-        # Generate async response
-        # Shortened personality prompt for faster, snappier replies
+        # PROPER SYSTEM INSTRUCTION FOR KNOWLEDGE & LANGUAGE
         full_prompt = (
-            "You are a witty, friendly Telegram music bot. "
-            "Reply to this user message. Keep it short (under 50 words). "
-            f"User: {prompt}"
+            "You are an intelligent and knowledgeable AI assistant integrated into a Telegram Bot. "
+            "Your task is to provide accurate, helpful, and concise answers to user queries using your internal knowledge base. "
+            "IMPORTANT: You must detect the language of the user's message and respond in that EXACT same language. "
+            "Do not translate unless asked. If the user speaks Hindi, reply in Hindi. If English, reply in English. "
+            "Keep the response natural and conversational. "
+            f"\n\nUser Message: {prompt}"
         )
+        
         response = await model.generate_content_async(full_prompt)
+        
+        # Check if the response was blocked by Google
+        if response.prompt_feedback and response.prompt_feedback.block_reason:
+            print(f"[Gemini Blocked] Reason: {response.prompt_feedback.block_reason}")
+            return None
+            
         return response.text
     except Exception as e:
-        print(f"[Gemini AI Error] {e}")
+        print(f"[Gemini Exception] {e}")
         return None
 
 # ============================================================
@@ -249,7 +258,7 @@ async def chatbot_toggle_cb(client, cq: CallbackQuery):
 async def chatbot_handler(client, message: Message):
     if message.edit_date or not message.from_user or not message.text:
         return
-    # Ignore commands
+    # Ignore commands starting with standard prefixes
     if message.text.startswith(("/", "!", ".", "#", "$")):
         return
 
@@ -274,8 +283,8 @@ async def chatbot_handler(client, message: Message):
             message_counts.pop(user_id, None)
             return await message.reply_text("⛔ Spam detected. Blocked for 1 min.")
 
-    # 2. Check if this is a direct reply to the Bot
-    # We do this BEFORE checking if the chatbot is disabled.
+    # 2. DETECT: Is this a reply to the bot?
+    # We check this FIRST. If it is a reply, we OVERRIDE disabled status.
     is_reply_to_bot = False
     bot = await client.get_me()
     
@@ -283,31 +292,31 @@ async def chatbot_handler(client, message: Message):
         if message.reply_to_message.from_user.id == bot.id:
             is_reply_to_bot = True
 
-    # 3. Status Check (Enabled/Disabled)
+    # 3. Status Check
+    # Only check if enabled if the user is NOT explicitly replying to the bot.
     if message.chat.type in [ChatType.GROUP, ChatType.SUPERGROUP]:
         s = status_coll.find_one({"chat_id": chat_id})
         
-        # If chatbot is disabled...
+        # If disabled...
         if s and s.get("status") == "disabled":
-            # ...ONLY stop if it is NOT a reply to the bot.
-            # If it IS a reply (is_reply_to_bot is True), we bypass this return.
+            # ...and NOT a direct reply to bot -> Ignore message
             if not is_reply_to_bot:
                 return
 
-    # 4. Blocklist Check (Input)
+    # 4. Blocklist Check (Bad Words)
     blocked_words = get_blocklist()
     msg_lower = message.text.lower()
     for w in blocked_words:
         if w in msg_lower: return
 
-    # 5. Context Check (When to reply)
+    # 5. Determine if we should reply
     should_reply = False
     if is_reply_to_bot:
-        should_reply = True
+        should_reply = True # Always reply if user replied to us
     elif message.chat.type == ChatType.PRIVATE:
-        should_reply = True
-    elif any(k in msg_lower for k in ["chatbot", "bot", "alexa", "siri", "gpt"]):
-        should_reply = True
+        should_reply = True # Always reply in PMs
+    elif any(k in msg_lower for k in ["chatbot", "bot", "alexa", "siri", "gpt", "gemini"]):
+        should_reply = True # Reply if triggered by name
 
     if not should_reply:
         return
@@ -316,24 +325,27 @@ async def chatbot_handler(client, message: Message):
     final_reply = None
 
     try:
-        # Send typing action so user knows AI is thinking
+        # Send typing action so user knows AI is working
         await client.send_chat_action(chat_id, enums.ChatAction.TYPING)
+        
+        # Get response from Gemini
         ai_response = await get_gemini_response(message.text)
+        
         if ai_response:
             final_reply = ai_response
+        else:
+            # This happens if API Key is invalid or Quota exceeded
+            print("[Log] Gemini returned None (likely API error or safety block).")
+            
     except Exception as e:
-        print(f"AI Error: {e}")
+        print(f"[Log] Chatbot Handler crashed: {e}")
 
-    # 7. Fallback Message (If AI fails)
+    # 7. Fail-safe (If AI fails completely)
     if not final_reply:
-        # Simple fallbacks just in case Gemini API is down
-        final_reply = random.choice([
-            "I'm having trouble connecting to my brain right now.", 
-            "Can you say that again?",
-            "Thinking..."
-        ])
+        # We give a technical error message so you know to fix the API key
+        final_reply = "⚠️ I am unable to connect to the AI server. Please contact the bot owner to check the API logs."
 
-    # 8. Send
+    # 8. Send Message
     try:
         await message.reply_text(final_reply)
     except Exception:
