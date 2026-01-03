@@ -5,6 +5,7 @@ from datetime import datetime, timedelta
 
 # -------------------- AI IMPORTS -------------------- #
 import google.generativeai as genai
+from google.api_core.exceptions import ResourceExhausted, InvalidArgument, PermissionDenied
 
 from pyrogram import filters, enums
 from pyrogram.types import (
@@ -18,15 +19,14 @@ from pymongo import MongoClient
 
 # -------------------- CONFIGURATION -------------------- #
 # !!! CRITICAL: You must use a valid API Key from https://aistudio.google.com/app/apikey !!!
-# The default key below is a placeholder and will likely fail.
-GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "")
+GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "AIzaSyCIFDjm0VwGqKJoFGjw6gnxlcPC-CQKCH8")
 
 # Configure Gemini
 if GEMINI_API_KEY:
     genai.configure(api_key=GEMINI_API_KEY)
     
     # UNRESTRICTED SAFETY SETTINGS
-    # This prevents the bot from blocking answers and falling back to "Thinking..."
+    # This minimizes "Safety block" errors.
     safety_settings = [
         {"category": "HARM_CATEGORY_HARASSMENT", "threshold": "BLOCK_NONE"},
         {"category": "HARM_CATEGORY_HATE_SPEECH", "threshold": "BLOCK_NONE"},
@@ -34,7 +34,6 @@ if GEMINI_API_KEY:
         {"category": "HARM_CATEGORY_DANGEROUS_CONTENT", "threshold": "BLOCK_NONE"},
     ]
     
-    # Using 'gemini-1.5-flash' for speed and multi-language support
     try:
         model = genai.GenerativeModel("gemini-1.5-flash", safety_settings=safety_settings)
     except Exception as e:
@@ -58,7 +57,6 @@ try:
     from config import MONGO_DB_URI as MONGO_URL
     from VIPMUSIC.misc import SUDOERS
 except Exception:
-    # Fallback config if imports fail
     MONGO_URL = os.environ.get("MONGO_URL", "")
     SUDOERS = []
 
@@ -95,9 +93,17 @@ DEFAULT_BLOCKED = [
     "nipples", "xxx", "porno", "cum", "masturbate", "erotic", "adult", "playboy",
     "hentai", "erotica", "fetish", "kink", "orgasm", "threesome", "xnxx",
     "xvideos", "xvideo", "pic", "nudepic",
-    "/start", "/help", "/play", "/vplay", "/end", "/playforce", "/vplayforce",
-    "/skip", "/pause", "/seek", "/loop", "/ban", "fban", "/warn", "/mute",
-    "/unban", "/unfban", "/newfed", "/chatfed", "/fedstat", "/myfeds",
+
+    "punda", "koothi", "soothu", "sutthu", "mayiru", "olmari", "okka",
+    "poolu", "olu", "sappu", "umbe", "kuththu", "thappu", "suthu", "paalu",
+    "adangommala", "adangomala", "adangotha", "adangottha",
+
+    "sunny", "call", "pm", "dm", "service", "ottha", "otta", "gommala",
+    "hole", "inch", "ash", "sexchat", "onlyfans", "cams", "chatsex", "adultchat",
+    "videochat", "sexting", "naked", "lingerie", "eroticvideo",
+
+    "/start", "/help", "/play", "/vplay", "/end", "/playforce", "/vplayforce", "/skip", "/pause", "/seek", "/loop", "/ban", "fban", "/warn", "/mute", "/unban", "/unfban", "/newfed", "/chatfed", "/fedstat", "/myfeds",
+    "💦", "💧", "🍑", "🍒", "🍆", "🥵", "🍌", "💋", "👅",
 ]
 
 # ===================== INITIALIZE BLOCKLIST ===================== #
@@ -138,38 +144,48 @@ async def is_user_admin(client, chat_id: int, user_id: int) -> bool:
         return False
 
 # ============================================================
-#                  AI HELPER FUNCTION (GEMINI)
+#             SMART AI HELPER (Reason-Aware)
 # ============================================================
 async def get_gemini_response(prompt: str):
     """
-    Fetches a response from Gemini using a strict system prompt.
+    Fetches a response from Gemini and returns:
+    - The text response (Success)
+    - A specific Error Code string (Failure)
     """
     if not model:
-        print("[Gemini Error] Model is not initialized. Check API Key.")
-        return None
+        return "ERROR_API_MISSING"
     
     try:
-        # PROPER SYSTEM INSTRUCTION FOR KNOWLEDGE & LANGUAGE
         full_prompt = (
-            "You are an intelligent and knowledgeable AI assistant integrated into a Telegram Bot. "
-            "Your task is to provide accurate, helpful, and concise answers to user queries using your internal knowledge base. "
-            "IMPORTANT: You must detect the language of the user's message and respond in that EXACT same language. "
-            "Do not translate unless asked. If the user speaks Hindi, reply in Hindi. If English, reply in English. "
-            "Keep the response natural and conversational. "
+            "You are an intelligent AI assistant integrated into a Telegram Bot. "
+            "Answer the user's question accurately. "
+            "IMPORTANT: Detect the user's language and reply in that EXACT same language. "
             f"\n\nUser Message: {prompt}"
         )
         
         response = await model.generate_content_async(full_prompt)
         
-        # Check if the response was blocked by Google
+        # Check for Safety Blocks
         if response.prompt_feedback and response.prompt_feedback.block_reason:
-            print(f"[Gemini Blocked] Reason: {response.prompt_feedback.block_reason}")
-            return None
+            return "ERROR_SAFETY"
+            
+        if not response.text:
+            return "ERROR_SAFETY" # Sometimes empty text means blocked
             
         return response.text
+
+    except ResourceExhausted:
+        return "ERROR_QUOTA"
+    except (InvalidArgument, PermissionDenied):
+        return "ERROR_API_INVALID"
     except Exception as e:
-        print(f"[Gemini Exception] {e}")
-        return None
+        error_str = str(e).lower()
+        if "429" in error_str or "quota" in error_str:
+            return "ERROR_QUOTA"
+        if "key" in error_str or "403" in error_str:
+            return "ERROR_API_INVALID"
+        print(f"[Gemini Unknown Error] {e}")
+        return "ERROR_GENERIC"
 
 # ============================================================
 #               COMMAND HANDLERS
@@ -258,7 +274,6 @@ async def chatbot_toggle_cb(client, cq: CallbackQuery):
 async def chatbot_handler(client, message: Message):
     if message.edit_date or not message.from_user or not message.text:
         return
-    # Ignore commands starting with standard prefixes
     if message.text.startswith(("/", "!", ".", "#", "$")):
         return
 
@@ -293,17 +308,15 @@ async def chatbot_handler(client, message: Message):
             is_reply_to_bot = True
 
     # 3. Status Check
-    # Only check if enabled if the user is NOT explicitly replying to the bot.
     if message.chat.type in [ChatType.GROUP, ChatType.SUPERGROUP]:
         s = status_coll.find_one({"chat_id": chat_id})
         
-        # If disabled...
+        # If disabled AND NOT a direct reply to bot -> Ignore
         if s and s.get("status") == "disabled":
-            # ...and NOT a direct reply to bot -> Ignore message
             if not is_reply_to_bot:
                 return
 
-    # 4. Blocklist Check (Bad Words)
+    # 4. Blocklist Check
     blocked_words = get_blocklist()
     msg_lower = message.text.lower()
     for w in blocked_words:
@@ -312,41 +325,46 @@ async def chatbot_handler(client, message: Message):
     # 5. Determine if we should reply
     should_reply = False
     if is_reply_to_bot:
-        should_reply = True # Always reply if user replied to us
+        should_reply = True
     elif message.chat.type == ChatType.PRIVATE:
-        should_reply = True # Always reply in PMs
+        should_reply = True
     elif any(k in msg_lower for k in ["chatbot", "bot", "alexa", "siri", "gpt", "gemini"]):
-        should_reply = True # Reply if triggered by name
+        should_reply = True
 
     if not should_reply:
         return
 
-    # 6. GENERATE RESPONSE (Pure AI)
+    # 6. GENERATE RESPONSE (Smart Fallback)
     final_reply = None
 
     try:
-        # Send typing action so user knows AI is working
         await client.send_chat_action(chat_id, enums.ChatAction.TYPING)
         
-        # Get response from Gemini
+        # Get AI Response or Error Code
         ai_response = await get_gemini_response(message.text)
         
-        if ai_response:
-            final_reply = ai_response
+        # --- SMART ERROR HANDLING LOGIC ---
+        if ai_response == "ERROR_API_MISSING":
+            final_reply = "⚠️ AI is offline. Contact admin"
+        elif ai_response == "ERROR_API_INVALID":
+            final_reply = "⚠️ AI is offline. Contact admin👀"
+        elif ai_response == "ERROR_QUOTA":
+            final_reply = "⏳ AI is busy. Try again in 1 minute."
+        elif ai_response == "ERROR_SAFETY":
+            final_reply = "🛡️ I cannot answer that query due to safety guidelines."
+        elif ai_response == "ERROR_GENERIC":
+            final_reply = "⚠️ My AI brain had a glitch. Please try again."
         else:
-            # This happens if API Key is invalid or Quota exceeded
-            print("[Log] Gemini returned None (likely API error or safety block).")
-            
+            # Success!
+            final_reply = ai_response
+
     except Exception as e:
-        print(f"[Log] Chatbot Handler crashed: {e}")
+        print(f"[Handler Crash] {e}")
+        final_reply = "⚠️ System Error."
 
-    # 7. Fail-safe (If AI fails completely)
-    if not final_reply:
-        # We give a technical error message so you know to fix the API key
-        final_reply = "⚠️ I am unable to connect to the AI server. Please contact the bot owner to check the API logs."
-
-    # 8. Send Message
+    # 7. Send Final Message
     try:
-        await message.reply_text(final_reply)
+        if final_reply:
+            await message.reply_text(final_reply)
     except Exception:
         pass
