@@ -1,9 +1,7 @@
 import os
 import random
-import re
 import asyncio
 from datetime import datetime, timedelta
-from typing import Optional
 
 # -------------------- AI IMPORTS -------------------- #
 import google.generativeai as genai
@@ -25,7 +23,7 @@ GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "AIzaSyCIFDjm0VwGqKJoFGjw6gnxl
 # Configure Gemini
 if GEMINI_API_KEY:
     genai.configure(api_key=GEMINI_API_KEY)
-    # Safety settings to prevent blocking legitimate queries (since we have our own blocklist)
+    # Safety settings to prevent blocking legitimate queries
     safety_settings = [
         {"category": "HARM_CATEGORY_HARASSMENT", "threshold": "BLOCK_NONE"},
         {"category": "HARM_CATEGORY_HATE_SPEECH", "threshold": "BLOCK_NONE"},
@@ -36,7 +34,7 @@ if GEMINI_API_KEY:
 else:
     model = None
 
-# -------------------- Application client -------------------- #
+# -------------------- Application Client -------------------- #
 try:
     from VIPMUSIC import app
 except Exception:
@@ -76,12 +74,11 @@ SUDO_IDS = list(set(SUDO_IDS))
 mongo = MongoClient(MONGO_URL)
 db = mongo.get_database("vipmusic_db")
 
-chatai_coll = db.get_collection("chatai")
+# Removed chatai_coll (Learning DB) as requested
 status_coll = db.get_collection("chatbot_status")
 BLOCK_COLL = db.get_collection("blocked_words")
 
 # Runtime Caches
-replies_cache = []
 blocklist_users = {}
 message_counts = {}
 
@@ -123,9 +120,6 @@ def add_block_word(word: str):
     word = word.lower().strip()
     if not BLOCK_COLL.find_one({"word": word}):
         BLOCK_COLL.insert_one({"word": word})
-    chatai_coll.delete_many({"word": word})
-    global replies_cache
-    replies_cache = [x for x in replies_cache if x.get("word") != word]
 
 def remove_block_word(word: str):
     word = word.lower().strip()
@@ -144,7 +138,7 @@ async def is_user_admin(client, chat_id: int, user_id: int) -> bool:
         return False
 
 # ============================================================
-#                 AI HELPER FUNCTION (GEMINI)
+#                  AI HELPER FUNCTION (GEMINI)
 # ============================================================
 async def get_gemini_response(prompt: str):
     """
@@ -156,61 +150,17 @@ async def get_gemini_response(prompt: str):
     
     try:
         # Generate async response
-        # We give it a personality prompt in the query
+        # Shortened personality prompt for faster, snappier replies
         full_prompt = (
-            "You are a helpful, witty, and friendly Telegram music bot assistant. "
-            "Keep your answer concise (under 50 words) and fun. "
-            f"User says: {prompt}"
+            "You are a witty, friendly Telegram music bot. "
+            "Reply to this user message. Keep it short (under 50 words). "
+            f"User: {prompt}"
         )
         response = await model.generate_content_async(full_prompt)
         return response.text
     except Exception as e:
         print(f"[Gemini AI Error] {e}")
         return None
-
-# ============================================================
-#                 DATABASE REPLY HELPERS
-# ============================================================
-def get_reply_sync(word: str):
-    global replies_cache
-    if not replies_cache:
-        try:
-            replies_cache.extend(list(chatai_coll.find({})))
-        except Exception:
-            pass
-
-    if not replies_cache:
-        return None
-
-    # Find matches
-    exact = [r for r in replies_cache if r.get("word") == (word or "")]
-    candidates = exact if exact else replies_cache
-    
-    return random.choice(candidates) if candidates else None
-
-async def save_reply(original: Message, reply: Message):
-    try:
-        if not original or not original.text or not reply.text:
-            return
-
-        bl = get_blocklist()
-        if any(re.search(rf"{re.escape(w)}", original.text, flags=re.IGNORECASE) for w in bl):
-            return
-
-        data = {
-            "word": original.text,
-            "text": reply.text,
-            "kind": "text",
-            "created_at": datetime.utcnow()
-        }
-
-        exists = chatai_coll.find_one({"word": data["word"], "text": data["text"]})
-        if not exists:
-            chatai_coll.insert_one(data)
-            replies_cache.append(data)
-
-    except Exception as e:
-        print("[chatbot] save_reply ERROR:", e)
 
 # ============================================================
 #               COMMAND HANDLERS
@@ -268,13 +218,6 @@ async def chatbot_settings(client, message):
     doc = status_coll.find_one({"chat_id": message.chat.id})
     enabled = not doc or doc.get("status") == "enabled"
     
-    # Check for reset
-    if "reset" in message.text.lower():
-         if not await is_user_admin(client, message.chat.id, message.from_user.id): return
-         chatai_coll.delete_many({})
-         replies_cache.clear()
-         return await message.reply_text("✅ Memory reset.")
-
     await message.reply_text(
         f"**🥂 Chatbot Status:** {'🍏 Enabled' if enabled else '🍎 Disabled'}",
         reply_markup=chatbot_keyboard(enabled)
@@ -297,17 +240,7 @@ async def chatbot_toggle_cb(client, cq: CallbackQuery):
     await cq.answer(new_status.title())
 
 # ============================================================
-#               LEARNING HANDLER (GROUP 98)
-# ============================================================
-@app.on_message(filters.reply & (filters.group | filters.private), group=98)
-async def learn_reply(client, message):
-    if not message.reply_to_message or not message.text: return
-    bot = await client.get_me()
-    if message.reply_to_message.from_user and message.reply_to_message.from_user.id == bot.id:
-        await save_reply(message.reply_to_message, message)
-
-# ============================================================
-#               HYBRID CHATBOT HANDLER (GROUP 99)
+#                AI CHATBOT HANDLER (GROUP 99)
 # ============================================================
 @app.on_message(
     filters.incoming & ~filters.me & (filters.group | filters.private),
@@ -316,6 +249,7 @@ async def learn_reply(client, message):
 async def chatbot_handler(client, message: Message):
     if message.edit_date or not message.from_user or not message.text:
         return
+    # Ignore commands
     if message.text.startswith(("/", "!", ".", "#", "$")):
         return
 
@@ -340,60 +274,66 @@ async def chatbot_handler(client, message: Message):
             message_counts.pop(user_id, None)
             return await message.reply_text("⛔ Spam detected. Blocked for 1 min.")
 
-    # 2. Status Check
+    # 2. Check if this is a direct reply to the Bot
+    # We do this BEFORE checking if the chatbot is disabled.
+    is_reply_to_bot = False
+    bot = await client.get_me()
+    
+    if message.reply_to_message and message.reply_to_message.from_user:
+        if message.reply_to_message.from_user.id == bot.id:
+            is_reply_to_bot = True
+
+    # 3. Status Check (Enabled/Disabled)
     if message.chat.type in [ChatType.GROUP, ChatType.SUPERGROUP]:
         s = status_coll.find_one({"chat_id": chat_id})
-        if s and s.get("status") == "disabled": return
+        
+        # If chatbot is disabled...
+        if s and s.get("status") == "disabled":
+            # ...ONLY stop if it is NOT a reply to the bot.
+            # If it IS a reply (is_reply_to_bot is True), we bypass this return.
+            if not is_reply_to_bot:
+                return
 
-    # 3. Blocklist Check (Input)
+    # 4. Blocklist Check (Input)
     blocked_words = get_blocklist()
     msg_lower = message.text.lower()
     for w in blocked_words:
         if w in msg_lower: return
 
-    # 4. Context Check (When to reply)
+    # 5. Context Check (When to reply)
     should_reply = False
-    if message.reply_to_message:
-        bot = await client.get_me()
-        if message.reply_to_message.from_user and message.reply_to_message.from_user.id == bot.id:
-            should_reply = True
+    if is_reply_to_bot:
+        should_reply = True
     elif message.chat.type == ChatType.PRIVATE:
         should_reply = True
-    elif any(k in msg_lower for k in ["chatbot", "bot", "alexa", "siri"]):
+    elif any(k in msg_lower for k in ["chatbot", "bot", "alexa", "siri", "gpt"]):
         should_reply = True
 
     if not should_reply:
         return
 
-    # 5. GENERATE RESPONSE
+    # 6. GENERATE RESPONSE (Pure AI)
     final_reply = None
 
-    # A. Check Database (Cost free)
-    db_reply = get_reply_sync(message.text)
-    if db_reply:
-        final_reply = db_reply.get("text")
-    
-    # B. Call AI (Costly, only if DB failed)
-    if not final_reply:
-        try:
-            # Send typing action so user knows AI is thinking
-            await client.send_chat_action(chat_id, enums.ChatAction.TYPING)
-            ai_response = await get_gemini_response(message.text)
-            if ai_response:
-                final_reply = ai_response
-        except Exception:
-            pass
+    try:
+        # Send typing action so user knows AI is thinking
+        await client.send_chat_action(chat_id, enums.ChatAction.TYPING)
+        ai_response = await get_gemini_response(message.text)
+        if ai_response:
+            final_reply = ai_response
+    except Exception as e:
+        print(f"AI Error: {e}")
 
-    # C. Fallback Safe Message (If both DB and AI failed)
+    # 7. Fallback Message (If AI fails)
     if not final_reply:
+        # Simple fallbacks just in case Gemini API is down
         final_reply = random.choice([
-            "I'm not sure about that yet.", 
-            "Thinking... 🤔", 
-            "Could you say that again?",
-            "I am just a music bot, but I am learning!"
+            "I'm having trouble connecting to my brain right now.", 
+            "Can you say that again?",
+            "Thinking..."
         ])
 
-    # 6. Send
+    # 8. Send
     try:
         await message.reply_text(final_reply)
     except Exception:
