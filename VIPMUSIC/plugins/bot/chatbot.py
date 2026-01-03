@@ -3,9 +3,13 @@ import random
 import asyncio
 from datetime import datetime, timedelta
 
-# -------------------- AI IMPORTS -------------------- #
-import google.generativeai as genai
-from google.api_core.exceptions import ResourceExhausted, InvalidArgument, PermissionDenied
+# -------------------- AI IMPORTS (NEW SDK) -------------------- #
+try:
+    from google import genai
+    from google.genai import types
+except ImportError:
+    print("CRITICAL: 'google-genai' library not found. Run: pip install google-genai")
+    genai = None
 
 from pyrogram import filters, enums
 from pyrogram.types import (
@@ -21,27 +25,15 @@ from pymongo import MongoClient
 # !!! CRITICAL: You must use a valid API Key from https://aistudio.google.com/app/apikey !!!
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "AIzaSyCIFDjm0VwGqKJoFGjw6gnxlcPC-CQKCH8")
 
-# Configure Gemini
-if GEMINI_API_KEY:
-    genai.configure(api_key=GEMINI_API_KEY)
-    
-    # UNRESTRICTED SAFETY SETTINGS
-    # This minimizes "Safety block" errors.
-    safety_settings = [
-        {"category": "HARM_CATEGORY_HARASSMENT", "threshold": "BLOCK_NONE"},
-        {"category": "HARM_CATEGORY_HATE_SPEECH", "threshold": "BLOCK_NONE"},
-        {"category": "HARM_CATEGORY_SEXUALLY_EXPLICIT", "threshold": "BLOCK_NONE"},
-        {"category": "HARM_CATEGORY_DANGEROUS_CONTENT", "threshold": "BLOCK_NONE"},
-    ]
-    
+# Configure Gemini Client (New SDK)
+client = None
+if GEMINI_API_KEY and genai:
     try:
-        model = genai.GenerativeModel("gemini-1.5-flash", safety_settings=safety_settings)
+        client = genai.Client(api_key=GEMINI_API_KEY)
     except Exception as e:
-        model = None
-        print(f"[FATAL ERROR] Could not load Gemini Model: {e}")
+        print(f"[FATAL ERROR] Could not initialize Gemini Client: {e}")
 else:
-    model = None
-    print("[FATAL ERROR] GEMINI_API_KEY is missing! The bot will not reply.")
+    print("[FATAL ERROR] GEMINI_API_KEY is missing or library not installed!")
 
 # -------------------- Application Client -------------------- #
 try:
@@ -144,18 +136,19 @@ async def is_user_admin(client, chat_id: int, user_id: int) -> bool:
         return False
 
 # ============================================================
-#             SMART AI HELPER (Reason-Aware)
+#             SMART AI HELPER (Updated for Google GenAI SDK)
 # ============================================================
 async def get_gemini_response(prompt: str):
     """
-    Fetches a response from Gemini and returns:
+    Fetches a response from Gemini (New SDK) and returns:
     - The text response (Success)
     - A specific Error Code string (Failure)
     """
-    if not model:
+    if not client:
         return "ERROR_API_MISSING"
     
     try:
+        # Construct the instruction
         full_prompt = (
             "You are an intelligent AI assistant integrated into a Telegram Bot. "
             "Answer the user's question accurately. "
@@ -163,27 +156,33 @@ async def get_gemini_response(prompt: str):
             f"\n\nUser Message: {prompt}"
         )
         
-        response = await model.generate_content_async(full_prompt)
-        
-        # Check for Safety Blocks
-        if response.prompt_feedback and response.prompt_feedback.block_reason:
-            return "ERROR_SAFETY"
-            
+        # New SDK Generation Call
+        response = await client.aio.models.generate_content(
+            model='gemini-1.5-flash',
+            contents=full_prompt,
+            config=types.GenerateContentConfig(
+                safety_settings=[
+                    types.SafetySetting(category="HARM_CATEGORY_HARASSMENT", threshold="BLOCK_NONE"),
+                    types.SafetySetting(category="HARM_CATEGORY_HATE_SPEECH", threshold="BLOCK_NONE"),
+                    types.SafetySetting(category="HARM_CATEGORY_SEXUALLY_EXPLICIT", threshold="BLOCK_NONE"),
+                    types.SafetySetting(category="HARM_CATEGORY_DANGEROUS_CONTENT", threshold="BLOCK_NONE"),
+                ]
+            )
+        )
+
         if not response.text:
-            return "ERROR_SAFETY" # Sometimes empty text means blocked
+            return "ERROR_SAFETY"
             
         return response.text
 
-    except ResourceExhausted:
-        return "ERROR_QUOTA"
-    except (InvalidArgument, PermissionDenied):
-        return "ERROR_API_INVALID"
     except Exception as e:
+        # Error handling compatible with new SDK exceptions
         error_str = str(e).lower()
-        if "429" in error_str or "quota" in error_str:
+        if "429" in error_str or "quota" in error_str or "exhausted" in error_str:
             return "ERROR_QUOTA"
-        if "key" in error_str or "403" in error_str:
+        if "key" in error_str or "403" in error_str or "permission" in error_str:
             return "ERROR_API_INVALID"
+        
         print(f"[Gemini Unknown Error] {e}")
         return "ERROR_GENERIC"
 
@@ -299,7 +298,6 @@ async def chatbot_handler(client, message: Message):
             return await message.reply_text("⛔ Spam detected. Blocked for 1 min.")
 
     # 2. DETECT: Is this a reply to the bot?
-    # We check this FIRST. If it is a reply, we OVERRIDE disabled status.
     is_reply_to_bot = False
     bot = await client.get_me()
     
@@ -310,7 +308,6 @@ async def chatbot_handler(client, message: Message):
     # 3. Status Check
     if message.chat.type in [ChatType.GROUP, ChatType.SUPERGROUP]:
         s = status_coll.find_one({"chat_id": chat_id})
-        
         # If disabled AND NOT a direct reply to bot -> Ignore
         if s and s.get("status") == "disabled":
             if not is_reply_to_bot:
@@ -345,9 +342,9 @@ async def chatbot_handler(client, message: Message):
         
         # --- SMART ERROR HANDLING LOGIC ---
         if ai_response == "ERROR_API_MISSING":
-            final_reply = "⚠️ AI is offline. Contact admin"
+            final_reply = "⚠️ AI is offline. Contact admin."
         elif ai_response == "ERROR_API_INVALID":
-            final_reply = "⚠️ AI is offline. Contact admin👀"
+            final_reply = "⚠️ AI is offline. Contact admin👀."
         elif ai_response == "ERROR_QUOTA":
             final_reply = "⏳ AI is busy. Try again in 1 minute."
         elif ai_response == "ERROR_SAFETY":
@@ -355,7 +352,6 @@ async def chatbot_handler(client, message: Message):
         elif ai_response == "ERROR_GENERIC":
             final_reply = "⚠️ My AI brain had a glitch. Please try again."
         else:
-            # Success!
             final_reply = ai_response
 
     except Exception as e:
