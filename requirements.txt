@@ -47,11 +47,9 @@ youtube_search
 youtube-search-python
 gtts
 lexica-api==1.4.7
-#httpx==0.25.2           # CUTE, SHUKLA =>0.28.1
-httpx>=0.27.0         # UPDATED: Required for Groq
-groq==0.9.0           # UPDATED: Explicit version helps stability
-openai==0.28.0
+httpx==0.25.2           # CUTE, SHUKLA =>0.28.1
 gpytranslate
+openai==0.28.0
 mpv
 moviepy
 #python-telegram-bot==21.1.1
