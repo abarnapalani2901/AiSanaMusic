@@ -7,7 +7,6 @@ from datetime import datetime, timedelta
 try:
     from groq import AsyncGroq
 except ImportError:
-    print("CRITICAL: 'groq' library not found. Run: pip install groq")
     AsyncGroq = None
 
 from pyrogram import filters, enums
@@ -21,23 +20,16 @@ from pyrogram.enums import ChatMemberStatus, ChatType
 from pymongo import MongoClient
 
 # -------------------- CONFIGURATION -------------------- #
-# !!! CRITICAL: DIRECTLY SETTING KEY FOR TESTING !!!
-API_KEY_VALUE = "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"
-GROQ_API_KEY = os.environ.get("GROQ_API_KEY", API_KEY_VALUE)
+# 1. Define the hardcoded key (Safe Fallback)
+HARDCODED_KEY = "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"
 
-# Configure Groq Client (Async is crucial for bots)
+# 2. Get Env Key, but fallback to Hardcoded if Env is missing OR empty
+GROQ_API_KEY = os.environ.get("GROQ_API_KEY")
+if not GROQ_API_KEY:
+    GROQ_API_KEY = HARDCODED_KEY
+
+# 3. Initialize Client variable as None (Lazy Loading will set it later)
 client = None
-
-if AsyncGroq:
-    try:
-        # Initialize client directly
-        client = AsyncGroq(api_key=GROQ_API_KEY)
-        print("✅ Groq Client Initialized Successfully!")
-    except Exception as e:
-        print(f"[FATAL ERROR] Could not initialize Groq Client: {e}")
-        client = None
-else:
-    print("[FATAL ERROR] 'groq' library is missing! Please run: pip install groq")
 
 # -------------------- Application Client -------------------- #
 try:
@@ -89,7 +81,7 @@ DEFAULT_BLOCKED = [
     "nipples", "xxx", "porno", "cum", "masturbate", "erotic", "adult", "playboy",
     "hentai", "erotica", "fetish", "kink", "orgasm", "threesome", "xnxx",
     "xvideos", "xvideo", "pic", "nudepic",
-
+    
     "punda", "koothi", "soothu", "sutthu", "mayiru", "olmari", "okka",
     "poolu", "olu", "sappu", "umbe", "kuththu", "thappu", "suthu", "paalu",
     "adangommala", "adangomala", "adangotha", "adangottha",
@@ -140,30 +132,33 @@ async def is_user_admin(client, chat_id: int, user_id: int) -> bool:
         return False
 
 # ============================================================
-#              SMART AI HELPER (Updated for GROQ)
+#              SMART AI HELPER (LAZY LOADING)
 # ============================================================
 async def get_groq_response(prompt: str):
-    """
-    Fetches a response from Groq (Llama 3) and returns:
-    - The text response (Success)
-    - A specific Error Code string (Failure)
-    """
-    # Debug print to check if client is actually None when calling
-    if client is None:
-        print("[DEBUG] Client is None during request!")
-        return "ERROR_API_MISSING"
+    global client
     
+    # --- 1. LAZY INITIALIZATION START ---
+    # This ensures we connect to Groq only when needed, avoiding startup crashes
+    if client is None:
+        if AsyncGroq is None:
+            return "ERROR_LIB_MISSING" # pip install groq
+        try:
+            client = AsyncGroq(api_key=GROQ_API_KEY)
+            print("✅ Groq Client Connected Successfully!")
+        except Exception as e:
+            print(f"❌ Failed to connect to Groq: {e}")
+            return "ERROR_API_INVALID"
+    # --- 1. LAZY INITIALIZATION END ---
+
     try:
-        # System Instruction
         system_prompt = (
             "You are an intelligent AI assistant integrated into a Telegram Bot. "
             "Answer the user's question accurately, concisely, and helpfully. "
             "IMPORTANT: Detect the user's language and reply in that EXACT same language."
         )
         
-        # Groq Generation Call
+        # Groq Generation Call (Llama 3)
         completion = await client.chat.completions.create(
-            # Using the requested model: llama3-8b-8192
             model="llama3-8b-8192", 
             messages=[
                 {"role": "system", "content": system_prompt},
@@ -188,7 +183,7 @@ async def get_groq_response(prompt: str):
 
         if "429" in error_str or "rate limit" in error_str:
             return "ERROR_QUOTA"
-        if "401" in error_str or "authentication" in error_str:
+        if "401" in error_str or "authentication" in error_str or "api key" in error_str:
             return "ERROR_API_INVALID"
         
         return "ERROR_GENERIC"
@@ -348,8 +343,10 @@ async def chatbot_handler(client, message: Message):
         ai_response = await get_groq_response(message.text)
         
         # --- SMART ERROR HANDLING LOGIC ---
-        if ai_response == "ERROR_API_MISSING":
-            final_reply = "⚠️ AI is offline. Contact admin."
+        if ai_response == "ERROR_LIB_MISSING":
+             final_reply = "⚠️ System Error: 'groq' library not installed. Run `pip install groq`"
+        elif ai_response == "ERROR_API_MISSING":
+            final_reply = "⚠️ AI is offline. Contact admin (API Key Missing)."
         elif ai_response == "ERROR_API_INVALID":
             final_reply = "⚠️ AI is offline. Invalid API Key."
         elif ai_response == "ERROR_QUOTA":
