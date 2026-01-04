@@ -21,18 +21,23 @@ from pyrogram.enums import ChatMemberStatus, ChatType
 from pymongo import MongoClient
 
 # -------------------- CONFIGURATION -------------------- #
-# !!! CRITICAL: Using the Groq API Key provided !!!
-GROQ_API_KEY = os.environ.get("GROQ_API_KEY", "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")
+# !!! CRITICAL: DIRECTLY SETTING KEY FOR TESTING !!!
+API_KEY_VALUE = "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"
+GROQ_API_KEY = os.environ.get("GROQ_API_KEY", API_KEY_VALUE)
 
 # Configure Groq Client (Async is crucial for bots)
 client = None
-if GROQ_API_KEY and AsyncGroq:
+
+if AsyncGroq:
     try:
+        # Initialize client directly
         client = AsyncGroq(api_key=GROQ_API_KEY)
+        print("✅ Groq Client Initialized Successfully!")
     except Exception as e:
         print(f"[FATAL ERROR] Could not initialize Groq Client: {e}")
+        client = None
 else:
-    print("[FATAL ERROR] GROQ_API_KEY is missing or library not installed!")
+    print("[FATAL ERROR] 'groq' library is missing! Please run: pip install groq")
 
 # -------------------- Application Client -------------------- #
 try:
@@ -143,7 +148,9 @@ async def get_groq_response(prompt: str):
     - The text response (Success)
     - A specific Error Code string (Failure)
     """
-    if not client:
+    # Debug print to check if client is actually None when calling
+    if client is None:
+        print("[DEBUG] Client is None during request!")
         return "ERROR_API_MISSING"
     
     try:
