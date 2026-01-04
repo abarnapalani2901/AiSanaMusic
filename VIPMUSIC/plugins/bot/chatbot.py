@@ -23,7 +23,7 @@ from pymongo import MongoClient
 
 # -------------------- CONFIGURATION -------------------- #
 # !!! CRITICAL: You must use a valid API Key from https://aistudio.google.com/app/apikey !!!
-GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "AIzaSyCIFDjm0VwGqKJoFGjw6gnxlcPC-CQKCH8")
+GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "AIzaSyBtaWV00gMo6OZBG_Mt-k6S95HSEWRLWmQ")
 
 # Configure Gemini Client (New SDK)
 client = None
