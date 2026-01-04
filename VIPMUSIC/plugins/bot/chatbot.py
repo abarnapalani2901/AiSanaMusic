@@ -3,13 +3,12 @@ import random
 import asyncio
 from datetime import datetime, timedelta
 
-# -------------------- AI IMPORTS (NEW SDK) -------------------- #
+# -------------------- AI IMPORTS (GROQ) -------------------- #
 try:
-    from google import genai
-    from google.genai import types
+    from groq import AsyncGroq
 except ImportError:
-    print("CRITICAL: 'google-genai' library not found. Run: pip install google-genai")
-    genai = None
+    print("CRITICAL: 'groq' library not found. Run: pip install groq")
+    AsyncGroq = None
 
 from pyrogram import filters, enums
 from pyrogram.types import (
@@ -22,18 +21,18 @@ from pyrogram.enums import ChatMemberStatus, ChatType
 from pymongo import MongoClient
 
 # -------------------- CONFIGURATION -------------------- #
-# !!! CRITICAL: You must use a valid API Key from https://aistudio.google.com/app/apikey !!!
-GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "AIzaSyBtaWV00gMo6OZBG_Mt-k6S95HSEWRLWmQ")
+# !!! CRITICAL: Using the Groq API Key provided !!!
+GROQ_API_KEY = os.environ.get("GROQ_API_KEY", "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")
 
-# Configure Gemini Client (New SDK)
+# Configure Groq Client (Async is crucial for bots)
 client = None
-if GEMINI_API_KEY and genai:
+if GROQ_API_KEY and AsyncGroq:
     try:
-        client = genai.Client(api_key=GEMINI_API_KEY)
+        client = AsyncGroq(api_key=GROQ_API_KEY)
     except Exception as e:
-        print(f"[FATAL ERROR] Could not initialize Gemini Client: {e}")
+        print(f"[FATAL ERROR] Could not initialize Groq Client: {e}")
 else:
-    print("[FATAL ERROR] GEMINI_API_KEY is missing or library not installed!")
+    print("[FATAL ERROR] GROQ_API_KEY is missing or library not installed!")
 
 # -------------------- Application Client -------------------- #
 try:
@@ -136,11 +135,11 @@ async def is_user_admin(client, chat_id: int, user_id: int) -> bool:
         return False
 
 # ============================================================
-#             SMART AI HELPER (Updated for Google GenAI SDK)
+#              SMART AI HELPER (Updated for GROQ)
 # ============================================================
-async def get_gemini_response(prompt: str):
+async def get_groq_response(prompt: str):
     """
-    Fetches a response from Gemini (New SDK) and returns:
+    Fetches a response from Groq (Llama 3) and returns:
     - The text response (Success)
     - A specific Error Code string (Failure)
     """
@@ -148,46 +147,47 @@ async def get_gemini_response(prompt: str):
         return "ERROR_API_MISSING"
     
     try:
-        # Construct the instruction
-        full_prompt = (
+        # System Instruction
+        system_prompt = (
             "You are an intelligent AI assistant integrated into a Telegram Bot. "
-            "Answer the user's question accurately. "
-            "IMPORTANT: Detect the user's language and reply in that EXACT same language. "
-            f"\n\nUser Message: {prompt}"
+            "Answer the user's question accurately, concisely, and helpfully. "
+            "IMPORTANT: Detect the user's language and reply in that EXACT same language."
         )
         
-        # New SDK Generation Call
-        response = await client.aio.models.generate_content(
-            model='gemini-1.5-flash',
-            contents=full_prompt,
-            config=types.GenerateContentConfig(
-                safety_settings=[
-                    types.SafetySetting(category="HARM_CATEGORY_HARASSMENT", threshold="BLOCK_NONE"),
-                    types.SafetySetting(category="HARM_CATEGORY_HATE_SPEECH", threshold="BLOCK_NONE"),
-                    types.SafetySetting(category="HARM_CATEGORY_SEXUALLY_EXPLICIT", threshold="BLOCK_NONE"),
-                    types.SafetySetting(category="HARM_CATEGORY_DANGEROUS_CONTENT", threshold="BLOCK_NONE"),
-                ]
-            )
+        # Groq Generation Call
+        completion = await client.chat.completions.create(
+            # Using the requested model: llama3-8b-8192
+            model="llama3-8b-8192", 
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": prompt}
+            ],
+            temperature=0.7,
+            max_tokens=1024,
+            top_p=1,
+            stream=False,
+            stop=None,
         )
 
-        if not response.text:
-            return "ERROR_SAFETY"
+        response_text = completion.choices[0].message.content
+        if not response_text:
+            return "ERROR_EMPTY"
             
-        return response.text
+        return response_text
 
     except Exception as e:
-        # Error handling compatible with new SDK exceptions
         error_str = str(e).lower()
-        if "429" in error_str or "quota" in error_str or "exhausted" in error_str:
+        print(f"[Groq Error] {error_str}")
+
+        if "429" in error_str or "rate limit" in error_str:
             return "ERROR_QUOTA"
-        if "key" in error_str or "403" in error_str or "permission" in error_str:
+        if "401" in error_str or "authentication" in error_str:
             return "ERROR_API_INVALID"
         
-        print(f"[Gemini Unknown Error] {e}")
         return "ERROR_GENERIC"
 
 # ============================================================
-#               COMMAND HANDLERS
+#                COMMAND HANDLERS
 # ============================================================
 @app.on_message(filters.command("addblock", prefixes=["/", "!", "."]) & filters.user(SUDO_IDS))
 async def addblock_cmd(client, message):
@@ -225,7 +225,7 @@ async def listblock_cmd(client, message):
     if chunk: await message.reply_text(chunk)
 
 # ============================================================
-#               UI & SETTINGS
+#                UI & SETTINGS
 # ============================================================
 def chatbot_keyboard(is_enabled: bool):
     return InlineKeyboardMarkup([[
@@ -325,30 +325,30 @@ async def chatbot_handler(client, message: Message):
         should_reply = True
     elif message.chat.type == ChatType.PRIVATE:
         should_reply = True
-    elif any(k in msg_lower for k in ["chatbot", "bot", "alexa", "siri", "gpt", "gemini"]):
+    elif any(k in msg_lower for k in ["chatbot", "bot", "alexa", "siri", "gpt", "gemini", "groq", "llama"]):
         should_reply = True
 
     if not should_reply:
         return
 
-    # 6. GENERATE RESPONSE (Smart Fallback)
+    # 6. GENERATE RESPONSE (Groq Integration)
     final_reply = None
 
     try:
         await client.send_chat_action(chat_id, enums.ChatAction.TYPING)
         
         # Get AI Response or Error Code
-        ai_response = await get_gemini_response(message.text)
+        ai_response = await get_groq_response(message.text)
         
         # --- SMART ERROR HANDLING LOGIC ---
         if ai_response == "ERROR_API_MISSING":
             final_reply = "⚠️ AI is offline. Contact admin."
         elif ai_response == "ERROR_API_INVALID":
-            final_reply = "⚠️ AI is offline. Contact admin👀."
+            final_reply = "⚠️ AI is offline. Invalid API Key."
         elif ai_response == "ERROR_QUOTA":
-            final_reply = "⏳ AI is busy. Try again in 1 minute."
-        elif ai_response == "ERROR_SAFETY":
-            final_reply = "🛡️ I cannot answer that query due to safety guidelines."
+            final_reply = "⏳ AI is busy. Rate limit exceeded, try again in 1 minute."
+        elif ai_response == "ERROR_EMPTY":
+            final_reply = "⚠️ AI returned no content."
         elif ai_response == "ERROR_GENERIC":
             final_reply = "⚠️ My AI brain had a glitch. Please try again."
         else:
