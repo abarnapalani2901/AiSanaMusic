@@ -32,10 +32,6 @@ WORKDIR /app/
 RUN python3 -m pip install --upgrade pip && \
     pip3 install --no-cache-dir -U -r requirements.txt
 
-#Increase Song Download speed
-RUN pip3 uninstall yt-dlp -y && pip cache purge && pip3 install --pre yt-dlp[default]
-RUN pip install groq httpx --upgrade
-RUN pip install google-genai 
 # Install Playwright browsers (Chromium only = lighter)
 #RUN playwright install chromium \
     #&& playwright install-deps chromium
