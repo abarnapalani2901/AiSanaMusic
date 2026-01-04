@@ -3,7 +3,7 @@ from pyrogram import Client
 from pyrogram.errors import FloodWait, ChatAdminRequired
 
 # ================= CONFIG ================= #
-TARGET_GROUP_ID = -1003374582476
+TARGET_GROUP_ID = -1003673296456
 
 GROUP_TITLE = "💭 𝐂ʜʌᴛ 𔘓 𝐇ᴏᴜƨᴇ 𓂃ꠂ💗ˎˊ˗"
 
