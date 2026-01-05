@@ -1,6 +1,7 @@
 import asyncio
 import time
 import random
+import logging
 from pyrogram import Client, filters
 from pyrogram.handlers import MessageHandler
 from pyrogram.types import Message
@@ -13,16 +14,17 @@ API_HASH = "15e39599e18d844b5b731d589a5d01c2"
 
 MONGO_DB_URI = "mongodb+srv://iamnobita1:nobitamusic1@cluster0.k08op.mongodb.net/?retryWrites=true&w=majority"
 
+# Permissions
 OWNERS = [8399160924, 6773435708]
 ADMINS = [8399160924, 6773435708, 5428992806, 8422248995]
 
 STRING_SESSIONS = [
-    "BQDMBnkAgP4mi-0bCSzgIadEuKsdDS7h4YcAgYtXTTqPWkHVe2zhB_e7hCFPkHMbnLXteG7hZs5fdBIHz7KCvUSaUTB21wPqK3kkDbs0B8bxQ4Blw_CjxJrbmHoWPevXB1_HIVOmWWvd4zldqypC_Ddj33WC6WgvOVVaFmQU2QGEAhycy4JTKSJDFU8gOxAi_TOxSYjjk9HiHYxnXo2DYqCK1UBXYF2TZC2mlyvtxS1VlHODX4gqsKzY9QpPvgcI2oXkr-Y7yjUhiL2laPFBQttyYINiVrCgWpTTxbBA_rI2iU0owZHzvgty-G-mbbke95AhYLndKoo44s3gRQLPP86hNiLQEgAAAAH2AVIjAQ", 
-    # Add more sessions here if needed
+    "BQDMBnkAgP4mi-0bCSzgIadEuKsdDS7h4YcAgYtXTTqPWkHVe2zhB_e7hCFPkHMbnLXteG7hZs5fdBIHz7KCvUSaUTB21wPqK3kkDbs0B8bxQ4Blw_CjxJrbmHoWPevXB1_HIVOmWWvd4zldqypC_Ddj33WC6WgvOVVaFmQU2QGEAhycy4JTKSJDFU8gOxAi_TOxSYjjk9HiHYxnXo2DYqCK1UBXYF2TZC2mlyvtxS1VlHODX4gqsKzY9QpPvgcI2oXkr-Y7yjUhiL2laPFBQttyYINiVrCgWpTTxbBA_rI2iU0owZHzvgty-G-mbbke95AhYLndKoo44s3gRQLPP86hNiLQEgAAAAH2AVIjAQ", #bot
+    "BQHI7ZMAvRoC74JvkhabzOy2taIY48ninlKLfKKrH7OngNefTThsmwj_K3iwE0pK5SVydd4738nskDDrxLIBlZMv7prrOeJ-9lYrB8Z3PlNhll5niVD96zPwgb5xpmNCubmgVPbXSzLOwl0vvnkh80TVVt-Hqa2I1siibKJBT82X_NjBgGRAkvL--rwGoTjIp1uvJVug6k9msieXAIstuZepNHbbuM3pxDpcuN5t-8YlU8cg2F5V_vsSe0t1PLdGLr0-UGhDhQ_VOFlnVZ_I6QWTXl5-STcxQCnzNdh5iRPj8GGWTKy0P71XKX9gJVVBS3HpDGvyPfr-MzbjuU7xofF8qQUENgAAAAH0oQZcAA", #shasha
 ]
 
+# Defaults
 DEFAULT_LIMIT = 3
-
 DEFAULT_PM_MSG = (
     "<blockquote>☆ . * ● ¸ . ✦ .★° :. ★ * • ○ ° ★</blockquote>\n"
     "<blockquote>ʜᴇʏ, ɪ'ᴍ 𝐏𝐦𝐒𝐞𝐜𝐮𝐫𝐞-✗-𝐁𝐨𝐭</blockquote>\n"
@@ -31,235 +33,260 @@ DEFAULT_PM_MSG = (
     "🚫 Spam = Auto Block (Limit: {limit})</blockquote>\n"
     "<blockquote>☆ . * ● ¸ . ✦ .★° :. ★ * • ○ ° ★</blockquote>"
 )
-
 DEFAULT_BLOCK_MSG = (
     "<blockquote>ʙᴇᴇᴘ ʙᴏᴏᴘ ⚠️ Spammer detected!\n"
     "Blocked successfully 🚫</blockquote>"
 )
+
+# Logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger("PM_GUARD")
 
 # ================= DATABASE ================= #
 
 mongo = MongoClient(MONGO_DB_URI)
 db = mongo["VIPMUSIC_PM_GUARD"]
 
-config_db = db["config"]
-approved_db = db["approved"]
-users_db = db["users"]
+config_col = db["config"]
+approved_col = db["approved"]
+users_col = db["users"]
 
-# ================= FLOOD CACHE ================= #
+# ================= RUNTIME CACHE (FLOOD) ================= #
 
-FLOOD_CACHE = {}
+# Flood cache stays in RAM because it needs to be instant
+FLOOD_CACHE = {} 
 
 # ================= HELPERS ================= #
 
 def get_config(key, default):
-    data = config_db.find_one({"_id": "main"})
-    return data.get(key, default) if data else default
+    doc = config_col.find_one({"_id": "main"})
+    return doc.get(key, default) if doc else default
 
 def set_config(key, value):
-    config_db.update_one(
-        {"_id": "main"},
-        {"$set": {key: value}},
-        upsert=True
-    )
+    config_col.update_one({"_id": "main"}, {"$set": {key: value}}, upsert=True)
 
-def is_allowed(uid):
-    return uid in OWNERS or uid in ADMINS or approved_db.find_one({"user_id": uid})
+def is_approved(uid):
+    if uid in OWNERS or uid in ADMINS:
+        return True
+    return approved_col.find_one({"user_id": uid}) is not None
 
-def approve(uid):
-    approved_db.update_one({"user_id": uid}, {"$set": {"user_id": uid}}, upsert=True)
-    users_db.delete_one({"user_id": uid})
+def approve_user(uid):
+    approved_col.update_one({"user_id": uid}, {"$set": {"user_id": uid}}, upsert=True)
+    users_col.delete_one({"user_id": uid}) # Reset warns
 
-def disapprove(uid):
-    approved_db.delete_one({"user_id": uid})
+def disapprove_user(uid):
+    approved_col.delete_one({"user_id": uid})
 
-def add_warn(uid):
-    data = users_db.find_one({"user_id": uid}) or {}
-    warns = data.get("warns", 0) + 1
-    users_db.update_one(
-        {"user_id": uid},
-        {"$set": {"warns": warns}},
-        upsert=True
-    )
-    return warns
-
-def reset_warn(uid):
-    users_db.delete_one({"user_id": uid})
-
-def is_flood(uid):
+def check_flood(uid):
+    """
+    Checks if user is spamming (5 messages in 15 seconds).
+    Returns True if flooding.
+    """
     now = time.time()
     FLOOD_CACHE.setdefault(uid, [])
-    FLOOD_CACHE[uid] = [t for t in FLOOD_CACHE[uid] if now - t < 20]
+    # Keep only timestamps within the last 15 seconds
+    FLOOD_CACHE[uid] = [t for t in FLOOD_CACHE[uid] if now - t < 15]
     FLOOD_CACHE[uid].append(now)
-    return len(FLOOD_CACHE[uid]) >= 6
+    
+    return len(FLOOD_CACHE[uid]) >= 5
 
-# ================= HANDLERS (LOGIC) ================= #
-
-async def pm_help(client, m):
-    await m.reply_text(
-        "**PM Security Commands**\n\n"
-        ".a / .approve – Allow user\n"
-        ".da / .dapprove – Disallow user\n"
-        ".setlimit <n>\n"
-        ".setpmmsg <text>\n"
-        ".setblockmsg <text>\n"
-        ".setpmimg (reply image)\n"
-        ".pmtoggle\n"
-        ".block"
+def increment_warn(uid):
+    res = users_col.find_one_and_update(
+        {"user_id": uid},
+        {"$inc": {"warns": 1}},
+        upsert=True,
+        return_document=True
     )
+    return res.get("warns", 1)
 
-async def approve_cmd(client, m):
-    if not m.reply_to_message:
-        return
-    approve(m.reply_to_message.from_user.id)
-    await m.reply("✅ User approved")
+def reset_warns(uid):
+    users_col.delete_one({"user_id": uid})
 
-async def disapprove_cmd(client, m):
-    if not m.reply_to_message:
-        return
-    disapprove(m.reply_to_message.from_user.id)
-    await m.reply("❌ User disapproved")
-
-async def set_limit(client, m):
+async def clean_previous_warnings(client, chat_id):
+    """Deletes previous bot messages to keep chat clean"""
     try:
-        limit = int(m.command[1])
-        set_config("limit", limit)
-        await m.reply(f"🔢 Warn limit set to {limit}")
+        async for msg in client.search_messages(chat_id, from_user="me", limit=5):
+            if "𝐏𝐦𝐒𝐞𝐜𝐮𝐫𝐞" in msg.text or "Warns:" in (msg.text or msg.caption or ""):
+                await msg.delete()
     except:
-        await m.reply("Usage: .setlimit 3")
+        pass
 
-async def set_pm(client, m):
+# ================= HANDLERS ================= #
+
+# --- Admin Commands ---
+
+async def help_cmd(_, m):
+    txt = (
+        "**🛡️ PM Guard Commands**\n\n"
+        "`.a` - Approve User\n"
+        "`.da` - Disapprove User\n"
+        "`.setlimit <n>` - Set Max Warns\n"
+        "`.setpmmsg <text>` - Set Warning Text\n"
+        "`.setblockmsg <text>` - Set Block Text\n"
+        "`.setpmimg` (Reply) - Set Image\n"
+        "`.pmimg` - Toggle Image On/Off\n"
+        "`.block` (Reply) - Force Block"
+    )
+    await m.reply(txt)
+
+async def approve_cmd(_, m):
+    if m.reply_to_message:
+        uid = m.reply_to_message.from_user.id
+        approve_user(uid)
+        await m.reply(f"✅ User {uid} approved to PM.")
+    else:
+        await m.reply("⚠️ Reply to a user.")
+
+async def disapprove_cmd(_, m):
+    if m.reply_to_message:
+        uid = m.reply_to_message.from_user.id
+        disapprove_user(uid)
+        await m.reply(f"❌ User {uid} disapproved.")
+    else:
+        await m.reply("⚠️ Reply to a user.")
+
+async def set_limit_cmd(_, m):
     try:
-        text = m.text.split(None, 1)[1]
-        set_config("pm_msg", text)
-        await m.reply("✅ PM message updated")
-    except IndexError:
-        await m.reply("Usage: .setpmmsg <text>")
+        val = int(m.command[1])
+        set_config("limit", val)
+        await m.reply(f"✅ Limit set to {val}")
+    except:
+        await m.reply("⚠️ Usage: .setlimit 5")
 
-async def set_block(client, m):
-    try:
-        text = m.text.split(None, 1)[1]
-        set_config("block_msg", text)
-        await m.reply("🚫 Block message updated")
-    except IndexError:
-        await m.reply("Usage: .setblockmsg <text>")
+async def set_pm_msg_cmd(_, m):
+    if len(m.command) > 1:
+        txt = m.text.split(None, 1)[1]
+        set_config("pm_msg", txt)
+        await m.reply("✅ PM Message updated.")
 
-async def set_img(client, m):
-    if not m.reply_to_message or not m.reply_to_message.photo:
-        return await m.reply("Reply to image")
-    set_config("pm_img", m.reply_to_message.photo.file_id)
-    set_config("img_on", True)
-    await m.reply("🖼️ PM image set")
+async def set_block_msg_cmd(_, m):
+    if len(m.command) > 1:
+        txt = m.text.split(None, 1)[1]
+        set_config("block_msg", txt)
+        await m.reply("✅ Block Message updated.")
 
-async def toggle(client, m):
-    status = not get_config("img_on", False)
-    set_config("img_on", status)
-    await m.reply(f"PM Image {'Enabled' if status else 'Disabled'}")
+async def set_img_cmd(_, m):
+    if m.reply_to_message and m.reply_to_message.photo:
+        fid = m.reply_to_message.photo.file_id
+        set_config("pm_img", fid)
+        set_config("img_on", True)
+        await m.reply("✅ PM Image set and enabled.")
+    else:
+        await m.reply("⚠️ Reply to an image.")
 
-async def manual_block(client, m):
-    if not m.reply_to_message:
-        return
-    uid = m.reply_to_message.from_user.id
-    await client.block_user(uid)
-    await m.reply("🚫 User blocked")
+async def toggle_img_cmd(_, m):
+    curr = get_config("img_on", False)
+    set_config("img_on", not curr)
+    await m.reply(f"✅ Image is now {'ON' if not curr else 'OFF'}")
 
-async def pm_guard_handler(client, m: Message):
-    # Only protect private chats, ignore self and bots
+async def block_cmd(c, m):
+    if m.reply_to_message:
+        await c.block_user(m.reply_to_message.from_user.id)
+        await m.reply("🚫 User blocked.")
+
+# --- Main Logic ---
+
+async def pm_guard(client: Client, m: Message):
+    # 1. Validation
+    if not m.from_user: return
     uid = m.from_user.id
-
-    # Optimization: Don't check DB for simple cases first
-    if is_allowed(uid):
+    
+    # Check Allow List
+    if is_approved(uid):
         return
 
-    # Small artificial delay to feel human
-    await asyncio.sleep(random.uniform(1.5, 3.5))
-
+    # 2. Settings Load
     limit = get_config("limit", DEFAULT_LIMIT)
-    pm_msg = get_config("pm_msg", DEFAULT_PM_MSG).format(limit=limit)
-    block_msg = get_config("block_msg", DEFAULT_BLOCK_MSG)
+    pm_text = get_config("pm_msg", DEFAULT_PM_MSG)
+    block_text = get_config("block_msg", DEFAULT_BLOCK_MSG)
     img_on = get_config("img_on", False)
     img_id = get_config("pm_img", None)
 
-    if is_flood(uid):
-        await m.reply_text(block_msg)
+    # 3. Flood Check (Immediate Block)
+    if check_flood(uid):
+        await m.reply(block_text)
         await client.block_user(uid)
+        reset_warns(uid) # Reset db warns but they are blocked now
         return
 
-    warns = add_warn(uid)
+    # 4. Processing Delay (Human-like)
+    await asyncio.sleep(random.uniform(0.5, 1.5))
+
+    # 5. Warn Logic
+    warns = increment_warn(uid)
 
     if warns > limit:
-        await m.reply_text(block_msg)
+        await m.reply(block_text)
         await client.block_user(uid)
-        reset_warn(uid)
+        reset_warns(uid)
         return
 
-    warn_text = f"{pm_msg}\n\n⚠️ Warns: {warns}/{limit}"
+    # 6. Send Warning
+    # Format message
+    try:
+        final_text = pm_text.format(limit=limit)
+    except:
+        final_text = pm_text
+    
+    final_text += f"\n\n⚠️ **Warns: {warns}/{limit}**"
 
+    # Delete old warning to keep chat clean
+    await clean_previous_warnings(client, m.chat.id)
+
+    # Send new warning
     if img_on and img_id:
         try:
-            await m.reply_photo(img_id, caption=warn_text)
-            return
+            await m.reply_photo(img_id, caption=final_text)
         except:
-            pass
+            await m.reply(final_text)
+    else:
+        await m.reply(final_text)
 
-    await m.reply_text(warn_text)
+# ================= CLIENT SETUP ================= #
 
-# ================= CLIENT INITIALIZATION ================= #
-
-async def start_pm_client(session_str, index):
-    if not session_str.strip():
-        return None
-    
+async def start_client(session, idx):
+    if not session: return
     try:
-        user_bot = Client(
-            name=f"VIPMUSIC_PM_{index}",
+        app = Client(
+            name=f"VIP_PM_{idx}",
             api_id=API_ID,
             api_hash=API_HASH,
-            session_string=session_str,
+            session_string=session,
             in_memory=True
         )
-
-        await user_bot.start()
-
-        # --- REGISTER HANDLERS MANUALLY ---
+        await app.start()
         
-        # 1. Admin Commands (Allow/Disallow/Config)
-        user_bot.add_handler(MessageHandler(pm_help, filters.command("pmhelp", prefixes=[".", "/"]) & filters.user(ADMINS)))
-        user_bot.add_handler(MessageHandler(approve_cmd, filters.command(["a", "approve"], prefixes=[".", "/"]) & filters.user(ADMINS)))
-        user_bot.add_handler(MessageHandler(disapprove_cmd, filters.command(["da", "dapprove"], prefixes=[".", "/"]) & filters.user(ADMINS)))
-        user_bot.add_handler(MessageHandler(set_limit, filters.command("setlimit", prefixes=[".", "/"]) & filters.user(ADMINS)))
-        user_bot.add_handler(MessageHandler(set_pm, filters.command("setpmmsg", prefixes=[".", "/"]) & filters.user(OWNERS)))
-        user_bot.add_handler(MessageHandler(set_block, filters.command("setblockmsg", prefixes=[".", "/"]) & filters.user(OWNERS)))
-        user_bot.add_handler(MessageHandler(set_img, filters.command("setpmimg", prefixes=[".", "/"]) & filters.user(OWNERS)))
-        user_bot.add_handler(MessageHandler(toggle, filters.command("pmtoggle", prefixes=[".", "/"]) & filters.user(OWNERS)))
-        user_bot.add_handler(MessageHandler(manual_block, filters.command("block", prefixes=[".", "/"]) & filters.user(ADMINS)))
+        # Register Admin Commands
+        app.add_handler(MessageHandler(help_cmd, filters.command("pmhelp", ".") & filters.user(ADMINS)))
+        app.add_handler(MessageHandler(approve_cmd, filters.command(["a", "approve"], ".") & filters.user(ADMINS)))
+        app.add_handler(MessageHandler(disapprove_cmd, filters.command(["da", "deny"], ".") & filters.user(ADMINS)))
+        app.add_handler(MessageHandler(set_limit_cmd, filters.command("setlimit", ".") & filters.user(ADMINS)))
+        app.add_handler(MessageHandler(set_pm_msg_cmd, filters.command("setpmmsg", ".") & filters.user(OWNERS)))
+        app.add_handler(MessageHandler(set_block_msg_cmd, filters.command("setblockmsg", ".") & filters.user(OWNERS)))
+        app.add_handler(MessageHandler(set_img_cmd, filters.command("setpmimg", ".") & filters.user(OWNERS)))
+        app.add_handler(MessageHandler(toggle_img_cmd, filters.command("pmimg", ".") & filters.user(OWNERS)))
+        app.add_handler(MessageHandler(block_cmd, filters.command("block", ".") & filters.user(ADMINS)))
 
-        # 2. PM Guard Logic (Incoming Private Messages)
-        # filters.private: Only private chats
-        # ~filters.me: Don't trigger on own messages
-        # ~filters.bot: Don't trigger on other bots
-        # ~filters.user(ADMINS): Optional optimization, don't guard against other admins if you want
-        user_bot.add_handler(MessageHandler(pm_guard_handler, filters.private & ~filters.me & ~filters.bot))
+        # Register PM Guard (Incoming Private Messages)
+        guard_filter = (filters.private & filters.incoming & ~filters.me & ~filters.bot & ~filters.service)
+        app.add_handler(MessageHandler(pm_guard, guard_filter))
 
-        me = await user_bot.get_me()
-        print(f"🛡️ [PM GUARD] Started for: {me.first_name} ({me.id})")
-        return user_bot
-
+        me = await app.get_me()
+        logger.info(f"🛡️ PM Guard Active: {me.first_name} | ID: {me.id}")
+        
+        # Keep client running
+        return app
+        
     except Exception as e:
-        print(f"❌ [PM GUARD] Failed to start client {index}: {e}")
-        return None
+        logger.error(f"Failed to start client {idx}: {e}")
 
-async def init_pm_guard():
-    if not STRING_SESSIONS:
-        return
-    
-    tasks = []
-    for i, session in enumerate(STRING_SESSIONS):
-        tasks.append(start_pm_client(session, i))
-    
-    await asyncio.gather(*tasks)
+async def main():
+    logger.info("Initializing PM Guard Clients...")
+    await asyncio.gather(*[start_client(s, i) for i, s in enumerate(STRING_SESSIONS) if s])
+    await asyncio.Event().wait() # Keep alive
 
-# ================= STARTUP ================= #
-
-if STRING_SESSIONS:
-    asyncio.create_task(init_pm_guard())
+if __name__ == "__main__":
+    try:
+        asyncio.run(main())
+    except KeyboardInterrupt:
+        pass
