@@ -7,6 +7,8 @@ from pyrogram import Client, filters, enums
 from pyrogram.errors import FloodWait, UserBlocked
 from pyrogram.types import Message
 from pymongo import MongoClient
+from pyrogram.handlers import MessageHandler
+
 
 # ================= CONFIG ================= #
 
