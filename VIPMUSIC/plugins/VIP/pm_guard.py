@@ -1,7 +1,4 @@
-# ======================================================
-# VIPMUSIC PM SECURITY MODULE (STRING USERBOT ONLY)
-# DO NOT USE FOR BOT TOKEN ACCOUNTS
-# ======================================================
+#pm_guard.py
 
 import os
 import asyncio
@@ -24,9 +21,9 @@ OWNERS = [8399160924, 6773435708]
 ADMINS = [8399160924, 6773435708, 5428992806]
 
 STRING_SESSIONS = [
-    "STRING_SESSION_1_HERE",
-    "STRING_SESSION_2_HERE",
-    "STRING_SESSION_3_HERE",
+    "BQDMBnkAgP4mi-0bCSzgIadEuKsdDS7h4YcAgYtXTTqPWkHVe2zhB_e7hCFPkHMbnLXteG7hZs5fdBIHz7KCvUSaUTB21wPqK3kkDbs0B8bxQ4Blw_CjxJrbmHoWPevXB1_HIVOmWWvd4zldqypC_Ddj33WC6WgvOVVaFmQU2QGEAhycy4JTKSJDFU8gOxAi_TOxSYjjk9HiHYxnXo2DYqCK1UBXYF2TZC2mlyvtxS1VlHODX4gqsKzY9QpPvgcI2oXkr-Y7yjUhiL2laPFBQttyYINiVrCgWpTTxbBA_rI2iU0owZHzvgty-G-mbbke95AhYLndKoo44s3gRQLPP86hNiLQEgAAAAH2AVIjAQ", #test bot token ghostt test bot
+    #"STRING_SESSION_2_HERE",
+    #"STRING_SESSION_3_HERE",
 ]
 
 DEFAULT_LIMIT = 3
