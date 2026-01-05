@@ -2,10 +2,10 @@ import asyncio
 import time
 import random
 import logging
-from pyrogram import Client, filters
+from pyrogram import Client, filters, enums
 from pyrogram.handlers import MessageHandler
 from pyrogram.types import Message
-from pymongo import MongoClient
+from pymongo import MongoClient, ReturnDocument
 
 # ================= CONFIGURATION ================= #
 
@@ -15,6 +15,7 @@ API_HASH = "15e39599e18d844b5b731d589a5d01c2"
 MONGO_DB_URI = "mongodb+srv://iamnobita1:nobitamusic1@cluster0.k08op.mongodb.net/?retryWrites=true&w=majority"
 
 # Permissions
+# IDs of people who control the bot (You + Trusted)
 OWNERS = [8399160924, 6773435708]
 ADMINS = [8399160924, 6773435708, 5428992806, 8422248995]
 
@@ -44,16 +45,19 @@ logger = logging.getLogger("PM_GUARD")
 
 # ================= DATABASE ================= #
 
-mongo = MongoClient(MONGO_DB_URI)
-db = mongo["VIPMUSIC_PM_GUARD"]
-
-config_col = db["config"]
-approved_col = db["approved"]
-users_col = db["users"]
+try:
+    mongo = MongoClient(MONGO_DB_URI)
+    db = mongo["VIPMUSIC_PM_GUARD"]
+    config_col = db["config"]
+    approved_col = db["approved"]
+    users_col = db["users"]
+    logger.info("✅ MongoDB Connected Successfully")
+except Exception as e:
+    logger.error(f"❌ MongoDB Connection Failed: {e}")
+    exit()
 
 # ================= RUNTIME CACHE (FLOOD) ================= #
 
-# Flood cache stays in RAM because it needs to be instant
 FLOOD_CACHE = {} 
 
 # ================= HELPERS ================= #
@@ -66,6 +70,7 @@ def set_config(key, value):
     config_col.update_one({"_id": "main"}, {"$set": {key: value}}, upsert=True)
 
 def is_approved(uid):
+    # Owners and Admins are always approved
     if uid in OWNERS or uid in ADMINS:
         return True
     return approved_col.find_one({"user_id": uid}) is not None
@@ -91,11 +96,12 @@ def check_flood(uid):
     return len(FLOOD_CACHE[uid]) >= 5
 
 def increment_warn(uid):
+    # Using ReturnDocument.AFTER to ensure we get the updated count
     res = users_col.find_one_and_update(
         {"user_id": uid},
         {"$inc": {"warns": 1}},
         upsert=True,
-        return_document=True
+        return_document=ReturnDocument.AFTER
     )
     return res.get("warns", 1)
 
@@ -106,7 +112,9 @@ async def clean_previous_warnings(client, chat_id):
     """Deletes previous bot messages to keep chat clean"""
     try:
         async for msg in client.search_messages(chat_id, from_user="me", limit=5):
-            if "𝐏𝐦𝐒𝐞𝐜𝐮𝐫𝐞" in msg.text or "Warns:" in (msg.text or msg.caption or ""):
+            # Look for keywords in text or caption
+            text = msg.text or msg.caption or ""
+            if "𝐏𝐦𝐒𝐞𝐜𝐮𝐫𝐞" in text or "Warns:" in text:
                 await msg.delete()
     except:
         pass
@@ -114,12 +122,14 @@ async def clean_previous_warnings(client, chat_id):
 # ================= HANDLERS ================= #
 
 # --- Admin Commands ---
+# Filter: Only allow if sender is Me (Owner) or in ADMINS list
+admin_filter = filters.command(["pmhelp", "a", "da", "setlimit", "setpmmsg", "setblockmsg", "setpmimg", "pmimg", "block"], prefixes=[".", "/"]) & (filters.me | filters.user(ADMINS))
 
 async def help_cmd(_, m):
     txt = (
-        "**🛡️ PM Guard Commands**\n\n"
-        "`.a` - Approve User\n"
-        "`.da` - Disapprove User\n"
+        "<b>🛡️ PM Guard Commands</b>\n\n"
+        "`.a` - Approve User (Reply)\n"
+        "`.da` - Disapprove User (Reply)\n"
         "`.setlimit <n>` - Set Max Warns\n"
         "`.setpmmsg <text>` - Set Warning Text\n"
         "`.setblockmsg <text>` - Set Block Text\n"
@@ -184,14 +194,26 @@ async def block_cmd(c, m):
         await c.block_user(m.reply_to_message.from_user.id)
         await m.reply("🚫 User blocked.")
 
-# --- Main Logic ---
+# --- Auto Approve Logic ---
+
+async def auto_approve_outgoing(_, m: Message):
+    """Automatically approve anyone the owner messages."""
+    if m.chat.type == enums.ChatType.PRIVATE:
+        user_id = m.chat.id
+        if not is_approved(user_id):
+            approve_user(user_id)
+            # Optional: Notify log
+            # logger.info(f"Auto-approved {user_id} because owner messaged them.")
+
+# --- Main Guard Logic ---
 
 async def pm_guard(client: Client, m: Message):
-    # 1. Validation
+    # 1. Validation: Must be incoming private msg, not from me, not from bot/service
     if not m.from_user: return
+    
     uid = m.from_user.id
     
-    # Check Allow List
+    # Check Allow List (Database or Admin List)
     if is_approved(uid):
         return
 
@@ -202,15 +224,15 @@ async def pm_guard(client: Client, m: Message):
     img_on = get_config("img_on", False)
     img_id = get_config("pm_img", None)
 
-    # 3. Flood Check (Immediate Block)
+    # 3. Flood Check (Immediate Block if spamming fast)
     if check_flood(uid):
         await m.reply(block_text)
         await client.block_user(uid)
-        reset_warns(uid) # Reset db warns but they are blocked now
+        reset_warns(uid)
         return
 
-    # 4. Processing Delay (Human-like)
-    await asyncio.sleep(random.uniform(0.5, 1.5))
+    # 4. Processing Delay (Human-like behavior)
+    await asyncio.sleep(random.uniform(0.5, 1.0))
 
     # 5. Warn Logic
     warns = increment_warn(uid)
@@ -222,13 +244,12 @@ async def pm_guard(client: Client, m: Message):
         return
 
     # 6. Send Warning
-    # Format message
     try:
         final_text = pm_text.format(limit=limit)
     except:
         final_text = pm_text
     
-    final_text += f"\n\n⚠️ **Warns: {warns}/{limit}**"
+    final_text += f"\n\n⚠️ <b>Warns: {warns}/{limit}</b>"
 
     # Delete old warning to keep chat clean
     await clean_previous_warnings(client, m.chat.id)
@@ -237,7 +258,7 @@ async def pm_guard(client: Client, m: Message):
     if img_on and img_id:
         try:
             await m.reply_photo(img_id, caption=final_text)
-        except:
+        except Exception as e:
             await m.reply(final_text)
     else:
         await m.reply(final_text)
@@ -252,29 +273,45 @@ async def start_client(session, idx):
             api_id=API_ID,
             api_hash=API_HASH,
             session_string=session,
-            in_memory=True
+            in_memory=True,
+            parse_mode=enums.ParseMode.HTML  # Important for blockquotes
         )
         await app.start()
         
-        # Register Admin Commands
-        app.add_handler(MessageHandler(help_cmd, filters.command("pmhelp", ".") & filters.user(ADMINS)))
-        app.add_handler(MessageHandler(approve_cmd, filters.command(["a", "approve"], ".") & filters.user(ADMINS)))
-        app.add_handler(MessageHandler(disapprove_cmd, filters.command(["da", "deny"], ".") & filters.user(ADMINS)))
-        app.add_handler(MessageHandler(set_limit_cmd, filters.command("setlimit", ".") & filters.user(ADMINS)))
-        app.add_handler(MessageHandler(set_pm_msg_cmd, filters.command("setpmmsg", ".") & filters.user(OWNERS)))
-        app.add_handler(MessageHandler(set_block_msg_cmd, filters.command("setblockmsg", ".") & filters.user(OWNERS)))
-        app.add_handler(MessageHandler(set_img_cmd, filters.command("setpmimg", ".") & filters.user(OWNERS)))
-        app.add_handler(MessageHandler(toggle_img_cmd, filters.command("pmimg", ".") & filters.user(OWNERS)))
-        app.add_handler(MessageHandler(block_cmd, filters.command("block", ".") & filters.user(ADMINS)))
+        # 1. Register Admin Commands
+        # Using filters.me ensures the owner can use commands even in Saved Messages (Outgoing)
+        app.add_handler(MessageHandler(help_cmd, filters.command("pmhelp", prefixes=".") & (filters.me | filters.user(ADMINS))))
+        app.add_handler(MessageHandler(approve_cmd, filters.command(["a", "approve"], prefixes=".") & (filters.me | filters.user(ADMINS))))
+        app.add_handler(MessageHandler(disapprove_cmd, filters.command(["da", "deny"], prefixes=".") & (filters.me | filters.user(ADMINS))))
+        app.add_handler(MessageHandler(set_limit_cmd, filters.command("setlimit", prefixes=".") & (filters.me | filters.user(ADMINS))))
+        app.add_handler(MessageHandler(set_pm_msg_cmd, filters.command("setpmmsg", prefixes=".") & (filters.me | filters.user(ADMINS))))
+        app.add_handler(MessageHandler(set_block_msg_cmd, filters.command("setblockmsg", prefixes=".") & (filters.me | filters.user(ADMINS))))
+        app.add_handler(MessageHandler(set_img_cmd, filters.command("setpmimg", prefixes=".") & (filters.me | filters.user(ADMINS))))
+        app.add_handler(MessageHandler(toggle_img_cmd, filters.command("pmimg", prefixes=".") & (filters.me | filters.user(ADMINS))))
+        app.add_handler(MessageHandler(block_cmd, filters.command("block", prefixes=".") & (filters.me | filters.user(ADMINS))))
 
-        # Register PM Guard (Incoming Private Messages)
-        guard_filter = (filters.private & filters.incoming & ~filters.me & ~filters.bot & ~filters.service)
+        # 2. Register Auto-Approve (Outgoing Messages)
+        # If YOU send a message, that user is automatically approved
+        app.add_handler(MessageHandler(
+            auto_approve_outgoing, 
+            filters.private & filters.outgoing & ~filters.bot & ~filters.service
+        ))
+
+        # 3. Register PM Guard (Incoming Private Messages)
+        # Added ~filters.command to ensure commands don't trigger the warning
+        guard_filter = (
+            filters.private & 
+            filters.incoming & 
+            ~filters.me & 
+            ~filters.bot & 
+            ~filters.service & 
+            ~filters.command(["pmhelp", "a", "da"], prefixes=".")
+        )
         app.add_handler(MessageHandler(pm_guard, guard_filter))
 
         me = await app.get_me()
         logger.info(f"🛡️ PM Guard Active: {me.first_name} | ID: {me.id}")
         
-        # Keep client running
         return app
         
     except Exception as e:
