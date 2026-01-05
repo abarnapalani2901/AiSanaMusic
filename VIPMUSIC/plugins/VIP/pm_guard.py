@@ -1,14 +1,10 @@
-#pm_guard.py
-
-import os
 import asyncio
 import time
 import random
-
 from pyrogram import Client, filters
+from pyrogram.handlers import MessageHandler
 from pyrogram.types import Message
 from pymongo import MongoClient
-from pyrogram import compose
 
 # ================= CONFIGURATION ================= #
 
@@ -18,12 +14,11 @@ API_HASH = "15e39599e18d844b5b731d589a5d01c2"
 MONGO_DB_URI = "mongodb+srv://iamnobita1:nobitamusic1@cluster0.k08op.mongodb.net/?retryWrites=true&w=majority"
 
 OWNERS = [8399160924, 6773435708]
-ADMINS = [8399160924, 6773435708, 5428992806]
+ADMINS = [8399160924, 6773435708, 5428992806, 8422248995]
 
 STRING_SESSIONS = [
-    "BQDMBnkAgP4mi-0bCSzgIadEuKsdDS7h4YcAgYtXTTqPWkHVe2zhB_e7hCFPkHMbnLXteG7hZs5fdBIHz7KCvUSaUTB21wPqK3kkDbs0B8bxQ4Blw_CjxJrbmHoWPevXB1_HIVOmWWvd4zldqypC_Ddj33WC6WgvOVVaFmQU2QGEAhycy4JTKSJDFU8gOxAi_TOxSYjjk9HiHYxnXo2DYqCK1UBXYF2TZC2mlyvtxS1VlHODX4gqsKzY9QpPvgcI2oXkr-Y7yjUhiL2laPFBQttyYINiVrCgWpTTxbBA_rI2iU0owZHzvgty-G-mbbke95AhYLndKoo44s3gRQLPP86hNiLQEgAAAAH2AVIjAQ", #test bot token ghostt test bot
-    #"STRING_SESSION_2_HERE",
-    #"STRING_SESSION_3_HERE",
+    "BQDMBnkAgP4mi-0bCSzgIadEuKsdDS7h4YcAgYtXTTqPWkHVe2zhB_e7hCFPkHMbnLXteG7hZs5fdBIHz7KCvUSaUTB21wPqK3kkDbs0B8bxQ4Blw_CjxJrbmHoWPevXB1_HIVOmWWvd4zldqypC_Ddj33WC6WgvOVVaFmQU2QGEAhycy4JTKSJDFU8gOxAi_TOxSYjjk9HiHYxnXo2DYqCK1UBXYF2TZC2mlyvtxS1VlHODX4gqsKzY9QpPvgcI2oXkr-Y7yjUhiL2laPFBQttyYINiVrCgWpTTxbBA_rI2iU0owZHzvgty-G-mbbke95AhYLndKoo44s3gRQLPP86hNiLQEgAAAAH2AVIjAQ", 
+    # Add more sessions here if needed
 ]
 
 DEFAULT_LIMIT = 3
@@ -98,26 +93,9 @@ def is_flood(uid):
     FLOOD_CACHE[uid].append(now)
     return len(FLOOD_CACHE[uid]) >= 6
 
-# ================= CLIENTS ================= #
+# ================= HANDLERS (LOGIC) ================= #
 
-clients = []
-
-for i, session in enumerate(STRING_SESSIONS):
-    if session.strip():
-        clients.append(
-            Client(
-                name=f"VIPMUSIC_PM_{i}",
-                api_id=API_ID,
-                api_hash=API_HASH,
-                session_string=session,
-                in_memory=True
-            )
-        )
-
-# ================= COMMANDS ================= #
-
-@Client.on_message(filters.command("pmhelp", prefixes=[".", "/"]) & filters.user(ADMINS))
-async def pm_help(_, m):
+async def pm_help(client, m):
     await m.reply_text(
         "**PM Security Commands**\n\n"
         ".a / .approve – Allow user\n"
@@ -130,22 +108,19 @@ async def pm_help(_, m):
         ".block"
     )
 
-@Client.on_message(filters.command(["a", "approve"], prefixes=[".", "/"]) & filters.user(ADMINS))
-async def approve_cmd(_, m):
+async def approve_cmd(client, m):
     if not m.reply_to_message:
         return
     approve(m.reply_to_message.from_user.id)
     await m.reply("✅ User approved")
 
-@Client.on_message(filters.command(["da", "dapprove"], prefixes=[".", "/"]) & filters.user(ADMINS))
-async def disapprove_cmd(_, m):
+async def disapprove_cmd(client, m):
     if not m.reply_to_message:
         return
     disapprove(m.reply_to_message.from_user.id)
     await m.reply("❌ User disapproved")
 
-@Client.on_message(filters.command("setlimit", prefixes=[".", "/"]) & filters.user(ADMINS))
-async def set_limit(_, m):
+async def set_limit(client, m):
     try:
         limit = int(m.command[1])
         set_config("limit", limit)
@@ -153,33 +128,34 @@ async def set_limit(_, m):
     except:
         await m.reply("Usage: .setlimit 3")
 
-@Client.on_message(filters.command("setpmmsg", prefixes=[".", "/"]) & filters.user(OWNERS))
-async def set_pm(_, m):
-    text = m.text.split(None, 1)[1]
-    set_config("pm_msg", text)
-    await m.reply("✅ PM message updated")
+async def set_pm(client, m):
+    try:
+        text = m.text.split(None, 1)[1]
+        set_config("pm_msg", text)
+        await m.reply("✅ PM message updated")
+    except IndexError:
+        await m.reply("Usage: .setpmmsg <text>")
 
-@Client.on_message(filters.command("setblockmsg", prefixes=[".", "/"]) & filters.user(OWNERS))
-async def set_block(_, m):
-    text = m.text.split(None, 1)[1]
-    set_config("block_msg", text)
-    await m.reply("🚫 Block message updated")
+async def set_block(client, m):
+    try:
+        text = m.text.split(None, 1)[1]
+        set_config("block_msg", text)
+        await m.reply("🚫 Block message updated")
+    except IndexError:
+        await m.reply("Usage: .setblockmsg <text>")
 
-@Client.on_message(filters.command("setpmimg", prefixes=[".", "/"]) & filters.user(OWNERS))
-async def set_img(_, m):
+async def set_img(client, m):
     if not m.reply_to_message or not m.reply_to_message.photo:
         return await m.reply("Reply to image")
     set_config("pm_img", m.reply_to_message.photo.file_id)
     set_config("img_on", True)
     await m.reply("🖼️ PM image set")
 
-@Client.on_message(filters.command("pmtoggle", prefixes=[".", "/"]) & filters.user(OWNERS))
-async def toggle(_, m):
+async def toggle(client, m):
     status = not get_config("img_on", False)
     set_config("img_on", status)
     await m.reply(f"PM Image {'Enabled' if status else 'Disabled'}")
 
-@Client.on_message(filters.command("block", prefixes=[".", "/"]) & filters.user(ADMINS))
 async def manual_block(client, m):
     if not m.reply_to_message:
         return
@@ -187,15 +163,15 @@ async def manual_block(client, m):
     await client.block_user(uid)
     await m.reply("🚫 User blocked")
 
-# ================= PM GUARD ================= #
-
-@Client.on_message(filters.private & ~filters.me & ~filters.bot)
-async def pm_guard(client, m: Message):
+async def pm_guard_handler(client, m: Message):
+    # Only protect private chats, ignore self and bots
     uid = m.from_user.id
 
+    # Optimization: Don't check DB for simple cases first
     if is_allowed(uid):
         return
 
+    # Small artificial delay to feel human
     await asyncio.sleep(random.uniform(1.5, 3.5))
 
     limit = get_config("limit", DEFAULT_LIMIT)
@@ -227,3 +203,63 @@ async def pm_guard(client, m: Message):
             pass
 
     await m.reply_text(warn_text)
+
+# ================= CLIENT INITIALIZATION ================= #
+
+async def start_pm_client(session_str, index):
+    if not session_str.strip():
+        return None
+    
+    try:
+        user_bot = Client(
+            name=f"VIPMUSIC_PM_{index}",
+            api_id=API_ID,
+            api_hash=API_HASH,
+            session_string=session_str,
+            in_memory=True
+        )
+
+        await user_bot.start()
+
+        # --- REGISTER HANDLERS MANUALLY ---
+        
+        # 1. Admin Commands (Allow/Disallow/Config)
+        user_bot.add_handler(MessageHandler(pm_help, filters.command("pmhelp", prefixes=[".", "/"]) & filters.user(ADMINS)))
+        user_bot.add_handler(MessageHandler(approve_cmd, filters.command(["a", "approve"], prefixes=[".", "/"]) & filters.user(ADMINS)))
+        user_bot.add_handler(MessageHandler(disapprove_cmd, filters.command(["da", "dapprove"], prefixes=[".", "/"]) & filters.user(ADMINS)))
+        user_bot.add_handler(MessageHandler(set_limit, filters.command("setlimit", prefixes=[".", "/"]) & filters.user(ADMINS)))
+        user_bot.add_handler(MessageHandler(set_pm, filters.command("setpmmsg", prefixes=[".", "/"]) & filters.user(OWNERS)))
+        user_bot.add_handler(MessageHandler(set_block, filters.command("setblockmsg", prefixes=[".", "/"]) & filters.user(OWNERS)))
+        user_bot.add_handler(MessageHandler(set_img, filters.command("setpmimg", prefixes=[".", "/"]) & filters.user(OWNERS)))
+        user_bot.add_handler(MessageHandler(toggle, filters.command("pmtoggle", prefixes=[".", "/"]) & filters.user(OWNERS)))
+        user_bot.add_handler(MessageHandler(manual_block, filters.command("block", prefixes=[".", "/"]) & filters.user(ADMINS)))
+
+        # 2. PM Guard Logic (Incoming Private Messages)
+        # filters.private: Only private chats
+        # ~filters.me: Don't trigger on own messages
+        # ~filters.bot: Don't trigger on other bots
+        # ~filters.user(ADMINS): Optional optimization, don't guard against other admins if you want
+        user_bot.add_handler(MessageHandler(pm_guard_handler, filters.private & ~filters.me & ~filters.bot))
+
+        me = await user_bot.get_me()
+        print(f"🛡️ [PM GUARD] Started for: {me.first_name} ({me.id})")
+        return user_bot
+
+    except Exception as e:
+        print(f"❌ [PM GUARD] Failed to start client {index}: {e}")
+        return None
+
+async def init_pm_guard():
+    if not STRING_SESSIONS:
+        return
+    
+    tasks = []
+    for i, session in enumerate(STRING_SESSIONS):
+        tasks.append(start_pm_client(session, i))
+    
+    await asyncio.gather(*tasks)
+
+# ================= STARTUP ================= #
+
+if STRING_SESSIONS:
+    asyncio.create_task(init_pm_guard())
