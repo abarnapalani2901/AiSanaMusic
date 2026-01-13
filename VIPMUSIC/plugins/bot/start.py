@@ -1,4 +1,3 @@
-#start.py
 import time
 from time import time
 import asyncio
@@ -9,7 +8,7 @@ from pyrogram.types import InlineKeyboardButton, InlineKeyboardMarkup, Message
 from youtubesearchpython.__future__ import VideosSearch
 from pyrogram.errors import UserAlreadyParticipant, UserNotParticipant
 import config
-from config import BANNED_USERS, GREET, MENTION_USERNAMES, START_REACTIONS, YUMI_PICS
+from config import BANNED_USERS, GREET, MENTION_USERNAMES, YUMI_PICS
 from VIPMUSIC import app
 from VIPMUSIC.misc import _boot_
 from VIPMUSIC.utils import bot_up_time
@@ -30,12 +29,25 @@ from VIPMUSIC.utils.extraction import extract_user
 from strings import get_string
 
 # 🚫 Anti-spam system
-# Define a dictionary to track the last message timestamp for each user
 user_last_message_time = {}
 user_command_count = {}
-# Define the threshold for command spamming (e.g., 20 commands within 60 seconds)
 SPAM_THRESHOLD = 2
 SPAM_WINDOW_SECONDS = 5
+
+# ==========================================
+#  PREMIUM MESSAGE EFFECTS (FULL SCREEN)
+# ==========================================
+# These IDs trigger the full screen animations seen in your screenshots.
+# 5046509860389126442 = 🎉 (Confetti/Party)
+# 5044134455711629726 = ❤️ (Hearts/Love)
+# 5104841245755180586 = 🔥 (Fire)
+# 5107584321108051014 = 👍 (Thumbs Up)
+
+FULL_SCREEN_EFFECTS = [
+    "5046509860389126442",  # 🎉 Confetti
+    "5044134455711629726",  # ❤️ Hearts
+    "5104841245755180586",  # 🔥 Fire
+]
 
 
 # ===================== /start in private =====================
@@ -77,15 +89,13 @@ async def start_pm(client, message: Message, _):
     # ---- Handle /help command directly ----
     if message.command[0] == "help":
         keyboard = first_page(_)
-        sent_help = await message.reply_photo(
+        # Sends photo with Confetti or Heart animation
+        await message.reply_photo(
             photo=config.START_IMG_URL,
             caption=_["help_1"].format(config.SUPPORT_CHAT),
             reply_markup=keyboard,
+            message_effect_id=random.choice(FULL_SCREEN_EFFECTS)
         )
-        try:
-            await sent_help.react(emoji=random.choice(START_REACTIONS))
-        except:
-            pass
         return
 
     # ---- Handle special params (/start help /start inf etc.) ----
@@ -95,15 +105,12 @@ async def start_pm(client, message: Message, _):
         # Help page
         if name.startswith("help"):
             keyboard = first_page(_)
-            sent_help_param = await message.reply_photo(
+            await message.reply_photo(
                 photo=config.START_IMG_URL,
                 caption=_["help_1"].format(config.SUPPORT_CHAT),
                 reply_markup=keyboard,
+                message_effect_id=random.choice(FULL_SCREEN_EFFECTS)
             )
-            try:
-                await sent_help_param.react(emoji=random.choice(START_REACTIONS))
-            except:
-                pass
             return
 
         # Sudo list
@@ -161,16 +168,13 @@ async def start_pm(client, message: Message, _):
             )
 
             await m.delete()
-            sent_info = await app.send_photo(
+            await app.send_photo(
                 chat_id=message.chat.id,
                 photo=thumbnail,
                 caption=searched_text,
                 reply_markup=key,
+                message_effect_id=random.choice(FULL_SCREEN_EFFECTS)
             )
-            try:
-                await sent_info.react(emoji=random.choice(START_REACTIONS))
-            except:
-                pass
             return
 
     # ===== NORMAL /START FLOW (animations then message) =====
@@ -206,16 +210,13 @@ async def start_pm(client, message: Message, _):
             await asyncio.sleep(0.25)
         await vips.delete()
 
-        # ✅ Step 4: Show main start photo after animation completes
-        final_msg = await message.reply_photo(
+        # ✅ Step 4: Show main start photo with FULL SCREEN EFFECT
+        await message.reply_photo(
             photo=config.START_IMG_URL,
             caption=caption,
             reply_markup=InlineKeyboardMarkup(out),
+            message_effect_id=random.choice(FULL_SCREEN_EFFECTS)
         )
-        try:
-            await final_msg.react(emoji=random.choice(START_REACTIONS))
-        except:
-            pass
 
         if await is_on_off(2):
             await app.send_message(
@@ -228,7 +229,6 @@ async def start_pm(client, message: Message, _):
 
     except Exception as e:
         print(f"[START Error] {e}")
-
 
 
 # ===================== /start in groups =====================
@@ -256,16 +256,15 @@ async def start_gp(client, message: Message, _):
 
     out = start_panel(_)
     BOT_UP = await bot_up_time()
-    sent_gp = await message.reply_photo(
+    
+    # Send Group Start Message with Full Screen Effect
+    await message.reply_photo(
         photo=config.START_IMG_URL,
         caption=_["start_2"].format(app.mention, BOT_UP),
         reply_markup=InlineKeyboardMarkup(out),
+        message_effect_id=random.choice(FULL_SCREEN_EFFECTS)
     )
-    try:
-        await sent_gp.react(emoji=random.choice(START_REACTIONS))
-    except:
-        pass
-
+    
     await add_served_chat(message.chat.id)
 
     # Assistant check
@@ -339,6 +338,7 @@ async def welcome(client, message: Message):
                 except Exception:
                     pass
 
+                # Welcome message with effect
                 await message.reply_photo(
                     random.choice(YUMI_PICS),
                     caption=_["start_3"].format(
@@ -348,6 +348,7 @@ async def welcome(client, message: Message):
                         app.mention,
                     ),
                     reply_markup=InlineKeyboardMarkup(out),
+                    message_effect_id=random.choice(FULL_SCREEN_EFFECTS)
                 )
                 await add_served_chat(message.chat.id)
                 await message.stop_propagation()
