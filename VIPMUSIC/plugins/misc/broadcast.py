@@ -1,5 +1,5 @@
+# broadcast.py
 import asyncio
-
 from pyrogram import filters
 from pyrogram.enums import ChatMembersFilter
 from pyrogram.errors import FloodWait
@@ -29,19 +29,31 @@ BROADCAST_ID = [
 
 IS_BROADCASTING = False
 
-
 # ==========================================
 # BROADCAST HANDLER
 # ==========================================
-# FIX: Added group=-1 to run BEFORE chatbot/ranking modules
-# FIX: Changed command syntax to ["broadcast", "gcast"] so both work
+
 @app.on_message(filters.command(["broadcast", "gcast"]) & (filters.user(BROADCAST_ID) | SUDOERS), group=-1)
 @language
 async def broadcast_message(client, message, _):
     global IS_BROADCASTING
 
     if IS_BROADCASTING:
-        return await message.reply_text("⚠️ A broadcast is already running.")
+        return await message.reply_text("⚠️ A broadcast is already running. Please wait for it to complete.")
+
+    # ---------- DETERMINE BROADCAST TYPE ----------
+    # If -wfchat or -chat is in message -> Broadcast to Groups
+    # If -wfuser or -user is in message -> Broadcast to Users
+    # If NO flag is provided -> Default to Users (Bot PM)
+    
+    text_clean = message.text
+    broadcast_chat = "-wfchat" in text_clean or "-chat" in text_clean
+    broadcast_user = "-wfuser" in text_clean or "-user" in text_clean
+    broadcast_assistant = "-assistant" in text_clean
+    
+    # Default fallback: If no specific flag is given, broadcast to Users (Bot PM)
+    if not broadcast_chat and not broadcast_user and not broadcast_assistant:
+        broadcast_user = True
 
     # ---------- PREPARE CONTENT ----------
     if message.reply_to_message:
@@ -49,19 +61,18 @@ async def broadcast_message(client, message, _):
         x = reply.id
         y = message.chat.id
         reply_markup = reply.reply_markup if reply.reply_markup else None
-
-        if reply.photo:
-            content_type = "photo"
-            file_id = reply.photo.file_id
-            caption = reply.caption
-        else:
-            content_type = "text"
-            text_content = reply.text
-
+        query = "Broadcasting..." # Placeholder for progress message
     else:
         if len(message.command) < 2:
             return await message.reply_text(_["broad_2"])
-        query = message.text.split(None, 1)[1].strip()
+        
+        # Remove flags from the message text so users don't see "-wfuser"
+        query = message.text.split(None, 1)[1]
+        flags_to_remove = ["-wfchat", "-chat", "-wfuser", "-user", "-assistant", "-forward"]
+        for flag in flags_to_remove:
+            query = query.replace(flag, "")
+        query = query.strip()
+
         if not query:
             return await message.reply_text(_["broad_8"])
 
@@ -69,10 +80,10 @@ async def broadcast_message(client, message, _):
     progress = await message.reply_text("🚀 **Broadcast started...**")
 
     # =====================================
-    # CHAT BROADCAST
+    # CHAT BROADCAST (GROUPS)
     # =====================================
 
-    if "-wfchat" in message.text:
+    if broadcast_chat:
         chats = [int(chat["chat_id"]) for chat in await get_served_chats()]
         total = len(chats)
         sent = 0
@@ -94,7 +105,7 @@ async def broadcast_message(client, message, _):
                         f"📢 **Chat Broadcast Progress**\n\n"
                         f"✅ Sent: `{sent}` / `{total}`"
                     )
-
+                
                 await asyncio.sleep(0.2)
 
             except FloodWait as fw:
@@ -109,10 +120,10 @@ async def broadcast_message(client, message, _):
         )
 
     # =====================================
-    # USER BROADCAST
+    # USER BROADCAST (BOT PM)
     # =====================================
 
-    if "-wfuser" in message.text:
+    if broadcast_user:
         users = [int(user["user_id"]) for user in await get_served_users()]
         total = len(users)
         sent = 0
@@ -152,7 +163,7 @@ async def broadcast_message(client, message, _):
     # ASSISTANT BROADCAST
     # =====================================
 
-    if "-assistant" in message.text:
+    if broadcast_assistant:
         from VIPMUSIC.core.userbot import assistants
 
         text = "🤖 **Assistant Broadcast Report**\n\n"
