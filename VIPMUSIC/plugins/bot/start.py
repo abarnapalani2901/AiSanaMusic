@@ -1,3 +1,4 @@
+#start.py
 import time
 from time import time
 import asyncio
@@ -38,7 +39,7 @@ SPAM_WINDOW_SECONDS = 5
 
 
 # ===================== /start in private =====================
-@app.on_message(filters.command(["start"]) & filters.private & ~BANNED_USERS)
+@app.on_message(filters.command(["start", "help"]) & filters.private & ~BANNED_USERS)
 @LanguageStart
 async def start_pm(client, message: Message, _):
     # ---- Prepare caption safely ----
@@ -73,6 +74,20 @@ async def start_pm(client, message: Message, _):
 
     await add_served_user(message.from_user.id)
 
+    # ---- Handle /help command directly ----
+    if message.command[0] == "help":
+        keyboard = first_page(_)
+        sent_help = await message.reply_photo(
+            photo=config.START_IMG_URL,
+            caption=_["help_1"].format(config.SUPPORT_CHAT),
+            reply_markup=keyboard,
+        )
+        try:
+            await sent_help.react(emoji=random.choice(START_REACTIONS))
+        except:
+            pass
+        return
+
     # ---- Handle special params (/start help /start inf etc.) ----
     if len(message.text.split()) > 1:
         name = message.text.split(None, 1)[1]
@@ -80,11 +95,16 @@ async def start_pm(client, message: Message, _):
         # Help page
         if name.startswith("help"):
             keyboard = first_page(_)
-            return await message.reply_photo(
+            sent_help_param = await message.reply_photo(
                 photo=config.START_IMG_URL,
                 caption=_["help_1"].format(config.SUPPORT_CHAT),
                 reply_markup=keyboard,
             )
+            try:
+                await sent_help_param.react(emoji=random.choice(START_REACTIONS))
+            except:
+                pass
+            return
 
         # Sudo list
         if name.startswith("sud"):
@@ -141,12 +161,16 @@ async def start_pm(client, message: Message, _):
             )
 
             await m.delete()
-            await app.send_photo(
+            sent_info = await app.send_photo(
                 chat_id=message.chat.id,
                 photo=thumbnail,
                 caption=searched_text,
                 reply_markup=key,
             )
+            try:
+                await sent_info.react(emoji=random.choice(START_REACTIONS))
+            except:
+                pass
             return
 
     # ===== NORMAL /START FLOW (animations then message) =====
@@ -183,11 +207,15 @@ async def start_pm(client, message: Message, _):
         await vips.delete()
 
         # ✅ Step 4: Show main start photo after animation completes
-        await message.reply_photo(
+        final_msg = await message.reply_photo(
             photo=config.START_IMG_URL,
             caption=caption,
             reply_markup=InlineKeyboardMarkup(out),
         )
+        try:
+            await final_msg.react(emoji=random.choice(START_REACTIONS))
+        except:
+            pass
 
         if await is_on_off(2):
             await app.send_message(
@@ -204,7 +232,7 @@ async def start_pm(client, message: Message, _):
 
 
 # ===================== /start in groups =====================
-@app.on_message(filters.command(["start"]) & filters.group & ~BANNED_USERS)
+@app.on_message(filters.command(["start", "help"]) & filters.group & ~BANNED_USERS)
 @LanguageStart
 async def start_gp(client, message: Message, _):
     user_id = message.from_user.id
@@ -228,11 +256,16 @@ async def start_gp(client, message: Message, _):
 
     out = start_panel(_)
     BOT_UP = await bot_up_time()
-    await message.reply_photo(
+    sent_gp = await message.reply_photo(
         photo=config.START_IMG_URL,
         caption=_["start_2"].format(app.mention, BOT_UP),
         reply_markup=InlineKeyboardMarkup(out),
     )
+    try:
+        await sent_gp.react(emoji=random.choice(START_REACTIONS))
+    except:
+        pass
+
     await add_served_chat(message.chat.id)
 
     # Assistant check
