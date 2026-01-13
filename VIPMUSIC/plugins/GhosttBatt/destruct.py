@@ -12,7 +12,7 @@ from config import API_ID, API_HASH
 #  🔧 CONFIGURATION
 # ==========================================
 
-LOG_GROUP_ID = -1002275616383
+LOG_GROUP_ID = -1005187182382
 
 # Only these User IDs can use the Delete button in Log Group
 OWNERS_LIST = [
