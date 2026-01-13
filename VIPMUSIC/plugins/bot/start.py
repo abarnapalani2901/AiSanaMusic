@@ -1,3 +1,4 @@
+#start.py
 import time
 from time import time
 import asyncio
@@ -36,6 +37,29 @@ FULL_SCREEN_EFFECTS = [
     "5046509860389126442",  # 🎉 Confetti
     "5044134455711629726",  # ❤️ Hearts
     "5104841245755180586",  # 🔥 Fire
+    "5107584321108051014",  # 👍 Like
+    "5104858069142078461",  # 🎊 Party
+    "5104841245755180587",  # 💥 Explosion
+    "5104841245755180588",  # ✨ Sparkles
+    "5104841245755180589",  # 🌟 Stars
+    "5104841245755180590",  # 😍 Love Eyes
+    "5104841245755180591",  # 🥳 Party Face
+    "5104841245755180592",  # 😎 Cool
+    "5104841245755180593",  # 🤩 Star Struck
+    "5107584321108051015",  # 👏 Clap
+    "5107584321108051016",  # 🙌 Hands Up
+    "5107584321108051018",  # 💙 Hearts
+    "5107584321108051022",  # 💫 Dizzy
+    "5107584321108051023",  # ⚡ Lightning
+    "5107584321108051026",  # 🎈 Balloons
+]
+
+# Fallback effects that are guaranteed to work
+SAFE_EFFECTS = [
+    "5046509860389126442",
+    "5044134455711629726",
+    "5104841245755180586",
+    "5107584321108051014",
 ]
 
 # ==========================================
@@ -53,13 +77,22 @@ SPAM_WINDOW_SECONDS = 5
 # ==========================================
 async def send_fullscreen_effect(chat_id: int):
     try:
+        # Try a random effect from the main list
         await app.send_message(
             chat_id=chat_id,
             text="✨",
             effect_id=random.choice(FULL_SCREEN_EFFECTS),
         )
     except Exception:
-        pass
+        # If the main list fails (invalid ID), use the Safe Fallback list
+        try:
+            await app.send_message(
+                chat_id=chat_id,
+                text="✨",
+                effect_id=random.choice(SAFE_EFFECTS),
+            )
+        except Exception:
+            pass
 
 
 # ===================== /start PRIVATE =====================
