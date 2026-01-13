@@ -12,8 +12,8 @@ API_HASH = getenv("API_HASH", "e6d1f09120e17a4372fe022dde88511b")
 BOT_TOKEN = getenv("BOT_TOKEN", "7992290736:AAGD8qaq9az6oFSkoU8bnDZQWELrVUZLuJA")
 
 # Get your mongo url from cloud.mongodb.com
-OWNER_USERNAME = getenv("OWNER_USERNAME","rajeshrakis")
-BOT_USERNAME = getenv("BOT_USERNAME", "thedakkidaikathaval_bot")
+OWNER_USERNAME = getenv("OWNER_USERNAME","OnixGhost")
+BOT_USERNAME = getenv("BOT_USERNAME", "SilukkuMusicBot")
 BOT_NAME = getenv("BOT_NAME", "𝞖𝘌𝘈𝘙𝘛𝞑𝘌𝘈𝘛𝂬♡𝂬𝘿𝘙𝘜𝘎𝘡")
 ASSUSERNAME = getenv("ASSUSERNAME", "Apple_Ponnu")
 EVALOP = list(map(int, getenv("EVALOP", "1281282633 8399160924 6773435708").split()))
@@ -34,7 +34,7 @@ LOG_GROUP_ID = int(getenv("LOG_GROUP_ID", "-1001735663878"))
 LOG_CHANNEL = int(getenv("LOG_CHANNEL", "-1003142547877")) #fed_logs
 
 # Get this value from  on Telegram by /id
-OWNER_ID = int(getenv("OWNER_ID", 1281282633))
+OWNER_ID = int(getenv("OWNER_ID", 8399160924))
 SUDOERS = getenv("SUDOERS", "1281282633 8399160924 6773435708").split()
 
 
