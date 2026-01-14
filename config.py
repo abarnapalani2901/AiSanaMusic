@@ -12,7 +12,7 @@ API_HASH = getenv("API_HASH", "725c7b4b34de7401b31c8b7f1ceb18e0")
 BOT_TOKEN = getenv("BOT_TOKEN", "7949410802:AAGcVl0iMd-coNVt_QuLRZLfj4YwTbN79s0")
 
 # Get your mongo url from cloud.mongodb.com
-OWNER_USERNAME = getenv("OWNER_USERNAME","OnixGhost")
+OWNER_USERNAME = getenv("OWNER_USERNAME","adityabansal619")
 BOT_USERNAME = getenv("BOT_USERNAME", "SilukkuMusicBot")
 BOT_NAME = getenv("BOT_NAME", "𝞖𝘌𝘈𝘙𝘛𝞑𝘌𝘈𝘛𝂬♡𝂬𝘿𝘙𝘜𝘎𝘡")
 ASSUSERNAME = getenv("ASSUSERNAME", "Apple_Ponnu")
@@ -20,7 +20,7 @@ EVALOP = list(map(int, getenv("EVALOP", "1281282633 8399160924 6773435708").spli
 MONGO_DB_URI = getenv("MONGO_DB_URI","mongodb+srv://zewdatabase:ijoXgdmQ0NCyg9DO@zewgame.urb3i.mongodb.net/ontap?retryWrites=true&w=majority")
 GPT_API = getenv("GPT_API", "sk-proj-h6pk40oVRIxpXwrf3i50T3BlbkFJGVET8wX1yJtdi0zCWjDQ")
 PLAYHT_API = getenv("PLAYHT_API", "22e323f342024c0fb4ee430eeb9d0011")
-DATABASE_NAME = getenv("DATABASE_NAME","ghosttFed")
+DATABASE_NAME = getenv("DATABASE_NAME","GopalFed")
 #ChatBot
 MONGO_URL = getenv("MONGO_URL","mongodb+srv://iamnobita1:nobitamusic1@cluster0.k08op.mongodb.net/?retryWrites=true&w=majority")
 #Reaction Bot - TRUE on / FALSE off
