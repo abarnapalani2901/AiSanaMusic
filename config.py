@@ -9,7 +9,7 @@ load_dotenv()
 # Get this value from my.telegram.org/apps
 API_ID = int(getenv("API_ID","8045459"))
 API_HASH = getenv("API_HASH", "e6d1f09120e17a4372fe022dde88511b")
-BOT_TOKEN = getenv("BOT_TOKEN", "7992290736:AAGD8qaq9az6oFSkoU8bnDZQWELrVUZLuJA")
+BOT_TOKEN = getenv("BOT_TOKEN", "7949410802:AAGcVl0iMd-coNVt_QuLRZLfj4YwTbN79s0")
 
 # Get your mongo url from cloud.mongodb.com
 OWNER_USERNAME = getenv("OWNER_USERNAME","OnixGhost")
@@ -17,12 +17,12 @@ BOT_USERNAME = getenv("BOT_USERNAME", "SilukkuMusicBot")
 BOT_NAME = getenv("BOT_NAME", "𝞖𝘌𝘈𝘙𝘛𝞑𝘌𝘈𝘛𝂬♡𝂬𝘿𝘙𝘜𝘎𝘡")
 ASSUSERNAME = getenv("ASSUSERNAME", "Apple_Ponnu")
 EVALOP = list(map(int, getenv("EVALOP", "1281282633 8399160924 6773435708").split()))
-MONGO_DB_URI = getenv("MONGO_DB_URI","mongodb+srv://ghosttbatt:Ghost2021@ghosttbatt.ocbirts.mongodb.net/?retryWrites=true&w=majority") #mongodb+srv://zewdatabase:ijoXgdmQ0NCyg9DO@zewgame.urb3i.mongodb.net/ontap?retryWrites=true&w=majority")
+MONGO_DB_URI = getenv("MONGO_DB_URI","mongodb+srv://zewdatabase:ijoXgdmQ0NCyg9DO@zewgame.urb3i.mongodb.net/ontap?retryWrites=true&w=majority")
 GPT_API = getenv("GPT_API", "sk-proj-h6pk40oVRIxpXwrf3i50T3BlbkFJGVET8wX1yJtdi0zCWjDQ")
 PLAYHT_API = getenv("PLAYHT_API", "22e323f342024c0fb4ee430eeb9d0011")
 DATABASE_NAME = getenv("DATABASE_NAME","ghosttFed")
 #ChatBot
-MONGO_URL = getenv("MONGO_URL","mongodb+srv://zewdatabase:ijoXgdmQ0NCyg9DO@zewgame.urb3i.mongodb.net/ontap?retryWrites=true&w=majority") #mongodb+srv://iamnobita1:nobitamusic1@cluster0.k08op.mongodb.net/?retryWrites=true&w=majority")
+MONGO_URL = getenv("MONGO_URL","mongodb+srv://iamnobita1:nobitamusic1@cluster0.k08op.mongodb.net/?retryWrites=true&w=majority")
 #Reaction Bot - TRUE on / FALSE off
 REACTION_ENABLED = getenv("REACTION_ENABLED","True")
 
@@ -31,11 +31,11 @@ DURATION_LIMIT_MIN = int(getenv("DURATION_LIMIT", 17000))
 # Chat id of a group for logging bot's activities
 LOGGER_ID = int(getenv("LOGGER_ID", "-1001735663878"))
 LOG_GROUP_ID = int(getenv("LOG_GROUP_ID", "-1001735663878"))
-LOG_CHANNEL = int(getenv("LOG_CHANNEL", "-1003142547877")) #fed_logs
+LOG_CHANNEL = int(getenv("LOG_CHANNEL", "-1003142547878")) #fed_logs
 
 # Get this value from  on Telegram by /id
-OWNER_ID = int(getenv("OWNER_ID", 8399160924))
-SUDOERS = getenv("SUDOERS", "1281282633 8399160924 6773435708").split()
+OWNER_ID = int(getenv("OWNER_ID", 7656547721))
+SUDOERS = getenv("SUDOERS", "7656547721 1281282633 8399160924 6773435708").split()
 
 
 SUPPORT_CHANNEL = getenv("SUPPORT_CHANNEL", "https://t.me/HeartBeat_Offi")
