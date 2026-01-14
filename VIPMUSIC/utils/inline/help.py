@@ -9,18 +9,20 @@ def first_page(_):
     buttons = [
         [
             InlineKeyboardButton(text=_["CMD_MUSIC"], callback_data="help_cat music"),
-            InlineKeyboardButton(text=_["CMD_GAMES"], callback_data="help_cat games"),
-        ],
-        [
             InlineKeyboardButton(text=_["CMD_MANAGE"], callback_data="help_cat management"),
+            #InlineKeyboardButton(text=_["CMD_GAMES"], callback_data="help_cat games"),
         ],
+        #[
+            #InlineKeyboardButton(text=_["CMD_MANAGE"], callback_data="help_cat management"),
+        #],
         [
             InlineKeyboardButton(text=_["CMD_CHAT"], callback_data="help_cat chat"),
-            InlineKeyboardButton(text=_["CMD_REACT"], callback_data="help_cat reaction"),
-        ],
-        [
             InlineKeyboardButton(text=_["CMD_MENTION"], callback_data="help_cat mention"),
+            #InlineKeyboardButton(text=_["CMD_REACT"], callback_data="help_cat reaction"),
         ],
+        #[
+            #InlineKeyboardButton(text=_["CMD_MENTION"], callback_data="help_cat mention"),
+        #],
         #[
          #   InlineKeyboardButton(text=_["BACK_BUTTON"], callback_data="settings_back_helper"),
         #],
