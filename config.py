@@ -61,8 +61,8 @@ AUTO_GCAST = os.getenv("AUTO_GCAST","False")
 AUTO_GCAST_MSG = getenv("AUTO_GCAST_MSG", "<blockquote>⋆｡°✩ **𝐋ᴇᴛƨ𝐕ɪʙᴇ𝐎ᴜᴛ** ✩°｡⋆\n[💋⟵꯭᪵〬𓂋⃝᜴͓ ⃪𝐒ㅤ͓ᷘɪㅤ⃪ᷢ𝐋ㅤ͓ᷴᴜㅤ⃪͓ᷚ𝐊 ₋ ͓ᷤᴋㅤ͢ ̌̍𝐔 🍷𓂃](https://t.me/SilukkuMusicBot)</blockquote>\n<blockquote>➽───𝐅ᴇᴧᴛᴜꝛᴇ𝗌-ɪɴ𝗌ɪᴅᴇ───❥\n🔻 ꝛᴏ𝗌ᴇ ғᴜηᴄᴛɪᴏɴ𝗌|ғᴇᴅ ❅ ꝛᴧηᴋɪɴɢ\n🔻 ᴡʜɪ𝗌ᴘᴇꝛ ϻ𝗌ɢ ❅ 𝗌ᴧηɢ-ϻᴧᴛᴧ\n🔻 ϻᴇɴᴛɪᴏη ❅ ᴄʜᴧᴛ|ꝛᴇᴧᴄᴛ\n─⋆｡°✩ **𝐋ᴏᴠᴇ-𝐌ᴧɢɪᴄ** ✩°｡⋆─\n🔻 ᴄᴏᴜᴘʟᴇ𝗌   ❅ ʟᴏᴠᴇ\n🔻 ғʟᴧϻᴇs     ❅ ᴜꝛᴜᴛᴛᴜ\n─⋆｡°✩ **𝐓ʜᴇ-𝐁ꝛᴇᴧᴋᴅᴏᴡɴ** ✩°｡⋆─\n🔻 ʟᴧɢ-ғʀᴇᴇ ϻᴜ𝗌ɪᴄ\n🔻 ᴠɪᴅᴇᴏ/ᴧᴜᴅɪᴏ ᴅᴏᴡηʟᴏᴧᴅ\n🔻 𝗌ᴜᴘᴘᴏꝛᴛ ʟɪηᴋs/ᴜꝛʟ'𝗌\n🔻 𝗌ᴜᴘᴘᴏꝛᴛ ʟɪᴠᴇ-𝗌ᴛʀᴇᴧϻ\n🔻 𝗌ᴜᴘᴘᴏꝛᴛ ɪɴ𝗌ᴛᴧ ᴅᴏᴡηʟᴏᴧᴅ𝗌</blockquote>\n<blockquote>𝆺𝅥 𝐃σит тσʋᴄн мʏ || [𝐂𝖗𝖚𝖘𝖍 🦇](https://t.me/rajeshrakis) ||</blockquote>")
 
 # Get this credentials from https://developer.spotify.com/dashboard
-SPOTIFY_CLIENT_ID = getenv("SPOTIFY_CLIENT_ID", "19609edb1b9f4ed7be0c8c1342039362")
-SPOTIFY_CLIENT_SECRET = getenv("SPOTIFY_CLIENT_SECRET", "409e31d3ddd64af08cfcc3b0f064fcbe")
+SPOTIFY_CLIENT_ID = getenv("SPOTIFY_CLIENT_ID", "")
+SPOTIFY_CLIENT_SECRET = getenv("SPOTIFY_CLIENT_SECRET", "")
 
 
 # Maximum limit for fetching playlist's track from youtube, spotify, apple links.
@@ -121,7 +121,7 @@ YUMI_PICS = [
 ]
 
 START_IMG_URL = getenv(
-    "START_IMG_URL", "https://files.catbox.moe/bybhxb.jpg"
+    "START_IMG_URL", "https://files.catbox.moe/etnbas.jpg"
 )
 PING_IMG_URL = getenv(
     "PING_IMG_URL", "https://graph.org/file/ffdb1be822436121cf5fd.png"
