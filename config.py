@@ -29,9 +29,9 @@ REACTION_ENABLED = getenv("REACTION_ENABLED","True")
 DURATION_LIMIT_MIN = int(getenv("DURATION_LIMIT", 17000))
 
 # Chat id of a group for logging bot's activities
-LOGGER_ID = int(getenv("LOGGER_ID", "-1001735663878"))
-LOG_GROUP_ID = int(getenv("LOG_GROUP_ID", "-1001735663878"))
-LOG_CHANNEL = int(getenv("LOG_CHANNEL", "-1003142547878")) #fed_logs
+LOGGER_ID = int(getenv("LOGGER_ID", "-1002275616383"))
+LOG_GROUP_ID = int(getenv("LOG_GROUP_ID", "-1002275616383"))
+LOG_CHANNEL = int(getenv("LOG_CHANNEL", "-1002275616383")) #fed_logs
 
 # Get this value from  on Telegram by /id
 OWNER_ID = int(getenv("OWNER_ID", 7656547721))
@@ -121,7 +121,7 @@ YUMI_PICS = [
 ]
 
 START_IMG_URL = getenv(
-    "START_IMG_URL", "https://files.catbox.moe/etnbas.jpg"
+    "START_IMG_URL", "https://i.ibb.co/VYytzh2Z/x.jpg"
 )
 PING_IMG_URL = getenv(
     "PING_IMG_URL", "https://graph.org/file/ffdb1be822436121cf5fd.png"
