@@ -121,7 +121,7 @@ YUMI_PICS = [
 ]
 
 START_IMG_URL = getenv(
-    "START_IMG_URL", "https://i.ibb.co/VYytzh2Z/x.jpg"
+    "START_IMG_URL", "https://files.catbox.moe/yz79fe.jpg"
 )
 PING_IMG_URL = getenv(
     "PING_IMG_URL", "https://graph.org/file/ffdb1be822436121cf5fd.png"
