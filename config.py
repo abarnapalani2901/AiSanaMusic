@@ -93,7 +93,7 @@ HEROKU_API_KEY = getenv("HEROKU_API_KEY", "HRKU-fc1b7aea-b37a-4015-9877-8c3967ee
 
 UPSTREAM_REPO = getenv(
     "UPSTREAM_REPO",
-    "https://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@github.com/GhosttBatt/Cute-Silukku",
+    "https://github.com/rajs2695/GopalMuzic",
 )
 UPSTREAM_BRANCH = getenv("UPSTREAM_BRANCH", "master")
 GIT_TOKEN = getenv(
