@@ -12,6 +12,7 @@ from pyrogram.types import (
     ChatJoinRequest,
     Message,
     User,
+    ChatPermissions,
 )
 from pyrogram.enums import ChatMemberStatus
 from pyrogram.errors import RPCError
@@ -109,6 +110,10 @@ def make_request_buttons(chat_id: int, user_id: int) -> InlineKeyboardMarkup:
                 InlineKeyboardButton("🍎 𝐃ɪ𝗌ᴍɪ𝗌𝗌", callback_data=f"jr:decline_prompt:{chat_id}:{user_id}"),
             ],
             [
+                InlineKeyboardButton("🤐 𝐌ᴜᴛᴇ", callback_data=f"jr:mute:{chat_id}:{user_id}"),
+                InlineKeyboardButton("🔨 𝐁ᴀɴ", callback_data=f"jr:ban:{chat_id}:{user_id}"),
+            ],
+            [
                 InlineKeyboardButton("🔻 𝐃ɪ𝗌ᴍɪ𝗌𝗌 𝐖ɪᴛʜ 𝐑ᴇᴀsᴏɴ 🔻", callback_data=f"jr:decline_reason:{chat_id}:{user_id}"),
             ],
         ]
@@ -139,6 +144,53 @@ def nice_user_details(user: User) -> str:
     if not name:
         name = "No name"
     return f"<b>{_html.escape(name)}</b> ({_html.escape(uname)})\nID: <code>{user.id}</code>"
+
+# -------------------------
+# Mute and Ban helpers
+# -------------------------
+async def mute_user(client, chat_id: int, user_id: int, admin: User) -> bool:
+    try:
+        # First approve the request so user joins
+        await client.approve_chat_join_request(chat_id, user_id)
+        
+        # Then mute the user
+        permissions = ChatPermissions(
+            can_send_messages=False,
+            can_send_media_messages=False,
+            can_send_other_messages=False,
+            can_add_web_page_previews=False,
+            can_send_polls=False,
+            can_change_info=False,
+            can_invite_users=False,
+            can_pin_messages=False,
+        )
+        
+        await client.restrict_chat_member(
+            chat_id=chat_id,
+            user_id=user_id,
+            permissions=permissions
+        )
+        
+        return True
+    except RPCError as e:
+        print(f"Error muting user: {e}")
+        return False
+
+async def ban_user(client, chat_id: int, user_id: int, admin: User) -> bool:
+    try:
+        # First approve the request so user joins
+        await client.approve_chat_join_request(chat_id, user_id)
+        
+        # Then ban the user
+        await client.ban_chat_member(
+            chat_id=chat_id,
+            user_id=user_id
+        )
+        
+        return True
+    except RPCError as e:
+        print(f"Error banning user: {e}")
+        return False
 
 # -------------------------
 # Commands & Menu
@@ -371,7 +423,7 @@ async def handle_chat_join_request(client, req: ChatJoinRequest):
 # -------------------------
 # Admin callbacks
 # -------------------------
-@app.on_callback_query(filters.regex(r"^jr:(approve|decline_prompt|decline_reason|view):-?\d+:\d+$"))
+@app.on_callback_query(filters.regex(r"^jr:(approve|decline_prompt|decline_reason|view|mute|ban):-?\d+:\d+$"))
 async def jr_admin_cb(client, cq: CallbackQuery):
     data = cq.data
     parts = data.split(":")
@@ -434,6 +486,38 @@ async def jr_admin_cb(client, cq: CallbackQuery):
             await client.send_message(caller.id, f"You chose to decline user <code>{user_id}</code> from group <code>{chat_id}</code>.\nPlease reply with the reason.")
         except RPCError:
             await cq.answer("Could not open private chat.", show_alert=True)
+
+    elif action == "mute":
+        try:
+            success = await mute_user(client, chat_id, user_id, caller)
+            if success:
+                await cq.edit_message_text(f"<blockquote>🤐 𝐌ᴜᴛᴇᴅ & 𝐀ᴘᴘʀᴏᴠᴇᴅ 𝐁ʏ \n{mention_html(caller)}</blockquote>\n<blockquote>✨ 𝐔𝗌ᴇʀ: <code>{user_id}</code></blockquote>")
+                await send_log(client, s.get("log_chat_id"), f"<blockquote>{ts()} — 🚀 𝐑ᴇǫᴜᴇ𝗌ᴛ 𝐌ᴜᴛᴇᴅ & 𝐀ᴘᴘʀᴏᴠᴇᴅ 𝐈ɴ \n <b>{chat_id}</b>\n✨ 𝐔𝗌ᴇʀ: <code>{user_id}</code></blockquote>\n<blockquote>𝐁ʏ: {mention_html(caller)}</blockquote>")
+                try:
+                    await client.send_message(user_id, f"🤐 You were approved and muted in <b>{_html.escape(str(chat_id))}</b> by {mention_html(caller)}.")
+                except RPCError:
+                    pass
+                await cq.answer("User approved and muted.", show_alert=False)
+            else:
+                await cq.answer("Failed to mute user.", show_alert=True)
+        except RPCError as e:
+            await cq.answer(f"Failed to mute: {e}", show_alert=True)
+
+    elif action == "ban":
+        try:
+            success = await ban_user(client, chat_id, user_id, caller)
+            if success:
+                await cq.edit_message_text(f"<blockquote>🔨 𝐁ᴀɴɴᴇᴅ & 𝐀ᴘᴘʀᴏᴠᴇᴅ 𝐁ʏ \n{mention_html(caller)}</blockquote>\n<blockquote>✨ 𝐔𝗌ᴇʀ: <code>{user_id}</code></blockquote>")
+                await send_log(client, s.get("log_chat_id"), f"<blockquote>{ts()} — 🚀 𝐑ᴇǫᴜᴇ𝗌ᴛ 𝐁ᴀɴɴᴇᴅ & 𝐀ᴘᴘʀᴏᴠᴇᴅ 𝐈ɴ \n <b>{chat_id}</b>\n✨ 𝐔𝗌ᴇʀ: <code>{user_id}</code></blockquote>\n<blockquote>𝐁ʏ: {mention_html(caller)}</blockquote>")
+                try:
+                    await client.send_message(user_id, f"🔨 You were approved and banned in <b>{_html.escape(str(chat_id))}</b> by {mention_html(caller)}.")
+                except RPCError:
+                    pass
+                await cq.answer("User approved and banned.", show_alert=False)
+            else:
+                await cq.answer("Failed to ban user.", show_alert=True)
+        except RPCError as e:
+            await cq.answer(f"Failed to ban: {e}", show_alert=True)
 
     elif action == "view":
         try:
