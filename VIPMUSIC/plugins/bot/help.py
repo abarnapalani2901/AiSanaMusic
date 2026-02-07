@@ -132,7 +132,7 @@ async def helper_cb(client, CallbackQuery, _):
                 pass
 
     # Pages that should show alert instead of normal text
-    alert_pages = ["hb26", "hb29", "hb30", "hb31", "hb32", "hb7", "hb8", "hb18", "hb33", "hb38", "hb40"]
+    alert_pages = ["hb32"]
 
     # If it's an alert page
     if cb in alert_pages:
