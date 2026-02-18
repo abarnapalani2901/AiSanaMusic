@@ -34,7 +34,7 @@ if not MONGO_URL:
 print("[joinreq] joinreq, approveall")
 
 mongo = motor.motor_asyncio.AsyncIOMotorClient(MONGO_URL)
-db = mongo.get_database("ghosttreq")
+db = mongo.get_database("ghosttreq_db")
 settings_coll = db.get_collection("join_request_settings")
 
 # Temporary in-memory states
@@ -212,7 +212,7 @@ async def cmd_jr_menu(client, message: Message):
     kb = make_owner_settings_kb(chat_id, s.get("enabled", False), s.get("auto_approve", False), s.get("log_chat_id"))
 
     text = (
-        f"<blockquote>🚀 𝐉ᴏɪɴ 𝐑ᴇǫᴜᴇ𝘀ᴛ 𝐌ᴇɴᴜ\n <b>{_html.escape(message.chat.title or str(chat_id))}</b></blockquote>\n"
+        f"<blockquote>🚀 𝐉ᴏɪɴ 𝐑ᴇǫᴜᴇ𝘴ᴛ 𝐌ᴇɴᴜ\n <b>{_html.escape(message.chat.title or str(chat_id))}</b></blockquote>\n"
         f"<blockquote>▪️ 𝐑ᴇǫ 𝐓ᴏ 𝐉ᴏɪɴ    : <code>{enabled}</code>\n"
         f"▪️ 𝐀ᴘᴘʀᴏᴠᴇ 𝐌ᴏᴅᴇ: <code>{auto_approve}</code>\n"
         f"▪️ 𝐋ᴏɢ 𝐆ʀᴏᴜᴘ    : <code>{log_chat}</code></blockquote>\n"
@@ -307,18 +307,30 @@ async def jr_cancel_cb(client, cq: CallbackQuery):
     await cq.message.delete()
 
 # -------------------------
-# OWNER PRIVATE HANDLER (FIXED)
+# OWNER PRIVATE HANDLER (SAFE + GROUPED)
 # -------------------------
-@app.on_message(filters.private & filters.reply & ~filters.bot)
+@app.on_message(
+    filters.private & filters.reply & ~filters.bot,
+    group=9998
+)
 async def owner_private_handler(client, message: Message):
-    reply = message.reply_to_message
-    
-    # 🛑 CRITICAL FIX: Only run if replying to the specific bot prompt
-    if not reply or not reply.text:
+
+    if not message.reply_to_message:
         return
-        
+
+    reply = message.reply_to_message
+
+    me = await client.get_me()
+
+    # Must be reply to THIS bot only
+    if not reply.from_user or reply.from_user.id != me.id:
+        return
+
+    if not reply.text:
+        return
+
+    # Strict check for log setup prompt
     if "Please reply to this message with the target log chat id" not in reply.text:
-        # Ignore this message, it's not for us. It might be for /tgt or something else.
         return
 
     text = (message.text or "").strip()
@@ -326,49 +338,104 @@ async def owner_private_handler(client, message: Message):
         return
 
     parts = text.split(maxsplit=1)
-    
-    # Validation Failure: Show usage WITH Cancel button
-    if len(parts) == 1:
-        cancel_kb = InlineKeyboardMarkup([[InlineKeyboardButton("❌ Cancel", callback_data="jr:cancel_log_prompt")]])
-        await message.reply_text(
-            "To set a log chat for a group, reply with:\n\n"
-            "<code>&lt;group_chat_id&gt; &lt;log_chat_id_or_@username&gt;</code>\n\nExample:\n<code>-1001234567890 -1009876543210</code>",
-            reply_markup=cancel_kb
+
+    if len(parts) < 2:
+        return await message.reply_text(
+            "Format:\n<code>-100groupid -100logid</code>"
         )
-        return
 
     try:
         target_chat = int(parts[0])
     except ValueError:
-        await message.reply_text("First argument must be the group chat id.")
-        return
+        return await message.reply_text("First argument must be group id.")
 
     log_target_raw = parts[1].strip()
+
     try:
         if log_target_raw.startswith("@"):
             resolved = await client.get_chat(log_target_raw)
             log_target_id = resolved.id
         else:
             log_target_id = int(log_target_raw)
-            _ = await client.get_chat(log_target_id)
+            await client.get_chat(log_target_id)
     except RPCError as e:
-        await message.reply_text(f"Could not resolve log chat: {e}")
-        return
+        return await message.reply_text(f"Invalid log chat: {e}")
 
     if not await is_group_owner(client, target_chat, message.from_user.id):
-        await message.reply_text("You are not the owner of that target group.")
-        return
+        return await message.reply_text("You are not owner of that group.")
 
     await set_settings(target_chat, {"log_chat_id": log_target_id})
-    await message.reply_text(f"✅ Log chat set for <code>{target_chat}</code> -> <code>{log_target_id}</code>")
-    
-    # Delete the prompt to clean up and prevent re-triggering
+
+    await message.reply_text(
+        f"✅ Log chat set for <code>{target_chat}</code>"
+    )
+
+    await send_log(
+        client,
+        log_target_id,
+        f"{ts()} — Log configured by {mention_html(message.from_user)}",
+    )
+
+# -------------------------
+# PRIVATE REASON HANDLER (STRICT + GROUPED) - UPDATED VERSION
+# -------------------------
+@app.on_message(
+    filters.private & ~filters.bot,
+    group=9999
+)
+async def private_reason_handler(client, message: Message):
+
+    # Do not touch commands
+    if message.text and message.text.startswith("/"):
+        return
+
+    admin_id = message.from_user.id
+
+    # ONLY trigger if waiting for reason
+    if admin_id not in PENDING_REASON_PROMPTS:
+        return
+
+    state = PENDING_REASON_PROMPTS.get(admin_id)
+    if not state:
+        return
+
+    # Expiry check
+    if datetime.datetime.utcnow() > state.get("expires_at"):
+        PENDING_REASON_PROMPTS.pop(admin_id, None)
+        return await message.reply_text("❌ Request expired.")
+
+    reason = (message.text or "").strip()
+    if not reason:
+        return await message.reply_text("Send a valid reason.")
+
+    chat_id = state["chat_id"]
+    user_id = state["user_id"]
+
     try:
-        await reply.delete() 
-    except:
+        await client.decline_chat_join_request(chat_id, user_id)
+    except RPCError as e:
+        PENDING_REASON_PROMPTS.pop(admin_id, None)
+        return await message.reply_text(f"Failed: {e}")
+
+    s = await get_settings(chat_id)
+
+    await send_log(
+        client,
+        s.get("log_chat_id"),
+        f"{ts()} — ❌ Declined with reason:\nUser: <code>{user_id}</code>\nReason: {_html.escape(reason)}",
+    )
+
+    await message.reply_text("✅ Declined.")
+
+    try:
+        await client.send_message(
+            user_id,
+            f"❌ Your join request was declined.\n\nReason:\n{_html.escape(reason)}"
+        )
+    except RPCError:
         pass
-        
-    await send_log(client, log_target_id, f"{ts()} — Log channel configured for group <code>{target_chat}</code> by {mention_html(message.from_user)}")
+
+    PENDING_REASON_PROMPTS.pop(admin_id, None)
 
 # -------------------------
 # Chat join request handler
@@ -527,53 +594,6 @@ async def jr_admin_cb(client, cq: CallbackQuery):
             await cq.edit_message_text(txt)
         except RPCError as e:
             await cq.answer(f"Could not fetch user: {e}", show_alert=True)
-
-# -------------------------
-# Private Reason Handler
-# -------------------------
-@app.on_message(filters.private & filters.reply & ~filters.bot)
-async def private_reason_handler(client, message: Message):
-    admin_id = message.from_user.id
-    if admin_id not in PENDING_REASON_PROMPTS:
-        return
-
-    state = PENDING_REASON_PROMPTS[admin_id]
-    if datetime.datetime.utcnow() > state.get("expires_at"):
-        del PENDING_REASON_PROMPTS[admin_id]
-        await message.reply_text("❌ The decline request has expired.")
-        return
-
-    reason = (message.text or "").strip()
-    if not reason:
-        await message.reply_text("Please send a non-empty reason.")
-        return
-
-    chat_id = state["chat_id"]
-    user_id = state["user_id"]
-    caller = message.from_user
-
-    try:
-        await client.decline_chat_join_request(chat_id, user_id)
-    except RPCError as e:
-        await message.reply_text(f"Failed to decline: {e}")
-        del PENDING_REASON_PROMPTS[admin_id]
-        return
-
-    s = await get_settings(chat_id)
-    log_text = (
-        f"{ts()} — ❌ Request declined (with reason)\n"
-        f"Group: <code>{chat_id}</code>\nUser: <code>{user_id}</code>\n"
-        f"Reason: {_html.escape(reason)}"
-    )
-    await send_log(client, s.get("log_chat_id"), log_text)
-    await message.reply_text("✅ Declined and logged reason.")
-
-    try:
-        await client.send_message(user_id, f"❌ Your join request to <b>{_html.escape(str(chat_id))}</b> was declined.\n\nReason:\n{_html.escape(reason)}")
-    except RPCError:
-        pass
-
-    del PENDING_REASON_PROMPTS[admin_id]
 
 # -------------------------
 # Approve All Shortcut
