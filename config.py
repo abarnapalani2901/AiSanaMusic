@@ -9,13 +9,17 @@ load_dotenv()
 # Get this value from my.telegram.org/apps
 API_ID = int(getenv("API_ID","35217688"))
 API_HASH = getenv("API_HASH", "725c7b4b34de7401b31c8b7f1ceb18e0")
-BOT_TOKEN = getenv("BOT_TOKEN", "7949410802:AAGcVl0iMd-coNVt_QuLRZLfj4YwTbN79s0")
+# ------------------------------------------------------
+BOT_TOKEN = getenv("BOT_TOKEN", "8777174568:AAE94P5HD5uu7W-H3Ts6QInI24DPn0rJyqU")
+# -------------------------------------------------------
+OWNER_USERNAME = getenv("OWNER_USERNAME","Ak_Power_47")
+# --------------------------------------------------------
+BOT_USERNAME = getenv("BOT_USERNAME" , "AiSanaXbot")
+# --------------------------------------------------------
+BOT_NAME = getenv("BOT_NAME" , "𝐀𝐢 𝐒𝐡𝐚𝐧𝐚 𝐌𝐮𝐬𝐢𝐜")
+# ---------------------------------------------------------
+ASSUSERNAME = getenv("ASSUSERNAME" , "Kuttima_1")
 
-# Get your mongo url from cloud.mongodb.com
-OWNER_USERNAME = getenv("OWNER_USERNAME","adityabansal619")
-BOT_USERNAME = getenv("BOT_USERNAME", "SilukkuMusicBot")
-BOT_NAME = getenv("BOT_NAME", "𝞖𝘌𝘈𝘙𝘛𝞑𝘌𝘈𝘛𝂬♡𝂬𝘿𝘙𝘜𝘎𝘡")
-ASSUSERNAME = getenv("ASSUSERNAME", "Apple_Ponnu")
 EVALOP = list(map(int, getenv("EVALOP", "1281282633 8399160924 6773435708").split()))
 MONGO_DB_URI = getenv("MONGO_DB_URI","mongodb+srv://zewdatabase:ijoXgdmQ0NCyg9DO@zewgame.urb3i.mongodb.net/ontap?retryWrites=true&w=majority")
 GPT_API = getenv("GPT_API", "sk-proj-h6pk40oVRIxpXwrf3i50T3BlbkFJGVET8wX1yJtdi0zCWjDQ")
@@ -34,8 +38,8 @@ LOG_GROUP_ID = int(getenv("LOG_GROUP_ID", "-1002275616383"))
 LOG_CHANNEL = int(getenv("LOG_CHANNEL", "-1002275616383")) #fed_logs
 
 # Get this value from  on Telegram by /id
-OWNER_ID = int(getenv("OWNER_ID", 7656547721))
-SUDOERS = getenv("SUDOERS", "7656547721 1281282633 8399160924 6773435708").split()
+OWNER_ID = int(getenv("OWNER_ID", 5574295371))
+SUDOERS = getenv("SUDOERS", "5574295371 8671058334 1281282633 6773435708").split()
 
 
 SUPPORT_CHANNEL = getenv("SUPPORT_CHANNEL", "https://t.me/+aGOm-h6fky9iNTJl")
@@ -93,7 +97,7 @@ HEROKU_API_KEY = getenv("HEROKU_API_KEY", "HRKU-fc1b7aea-b37a-4015-9877-8c3967ee
 
 UPSTREAM_REPO = getenv(
     "UPSTREAM_REPO",
-    "https://github.com/rajs2695/GopalMuzic",
+    "https://github.com/abarnapalani2901/AiSanaMusic",
 )
 UPSTREAM_BRANCH = getenv("UPSTREAM_BRANCH", "master")
 GIT_TOKEN = getenv(
