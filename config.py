@@ -24,7 +24,7 @@ EVALOP = list(map(int, getenv("EVALOP", "1281282633 8399160924 6773435708").spli
 MONGO_DB_URI = getenv("MONGO_DB_URI","mongodb+srv://zewdatabase:ijoXgdmQ0NCyg9DO@zewgame.urb3i.mongodb.net/ontap?retryWrites=true&w=majority")
 GPT_API = getenv("GPT_API", "sk-proj-h6pk40oVRIxpXwrf3i50T3BlbkFJGVET8wX1yJtdi0zCWjDQ")
 PLAYHT_API = getenv("PLAYHT_API", "22e323f342024c0fb4ee430eeb9d0011")
-DATABASE_NAME = getenv("DATABASE_NAME","GopalFed")
+DATABASE_NAME = getenv("DATABASE_NAME","aisanaFed")
 #ChatBot
 MONGO_URL = getenv("MONGO_URL","mongodb+srv://iamnobita1:nobitamusic1@cluster0.k08op.mongodb.net/?retryWrites=true&w=majority")
 #Reaction Bot - TRUE on / FALSE off
@@ -38,12 +38,12 @@ LOG_GROUP_ID = int(getenv("LOG_GROUP_ID", "-1002275616383"))
 LOG_CHANNEL = int(getenv("LOG_CHANNEL", "-1002275616383")) #fed_logs
 
 # Get this value from  on Telegram by /id
-OWNER_ID = int(getenv("OWNER_ID", 8671058334))
+OWNER_ID = int(getenv("OWNER_ID", 5574295371))
 SUDOERS = getenv("SUDOERS", "5574295371 8671058334 1281282633 6773435708").split()
 
 
-SUPPORT_CHANNEL = getenv("SUPPORT_CHANNEL", "https://t.me/+aGOm-h6fky9iNTJl")
-SUPPORT_CHAT = getenv("SUPPORT_CHAT", "https://t.me/+KLxwGZXpKrY4OTY1")
+SUPPORT_CHANNEL = getenv("SUPPORT_CHANNEL", "https://t.me/TamilFRlE")
+SUPPORT_CHAT = getenv("SUPPORT_CHAT", "https://t.me/TamilFRlE")
 MUST_JOIN = getenv("MUST_JOIN", "HeartBeat_Offi")
 
 #Ranking
