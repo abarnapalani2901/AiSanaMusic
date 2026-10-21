@@ -38,8 +38,8 @@ LOG_GROUP_ID = int(getenv("LOG_GROUP_ID", "-1002275616383"))
 LOG_CHANNEL = int(getenv("LOG_CHANNEL", "-1002275616383")) #fed_logs
 
 # Get this value from  on Telegram by /id
-OWNER_ID = int(getenv("OWNER_ID", 5574295371))
-SUDOERS = getenv("SUDOERS", "5574295371 8671058334 1281282633 6773435708").split()
+OWNER_ID = int(getenv("OWNER_ID", 8997214968))
+SUDOERS = getenv("SUDOERS", "8997214968 5574295371 8671058334 1281282633 6773435708").split()
 
 
 SUPPORT_CHANNEL = getenv("SUPPORT_CHANNEL", "https://t.me/TamilFRlE")
