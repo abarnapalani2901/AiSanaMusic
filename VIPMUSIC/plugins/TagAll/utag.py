@@ -47,7 +47,7 @@ async def tag_all_users(_, message):
         except Exception as e:
             print(e)
 
-@app.on_message(filters.command(["stoputag", "stopuall", "offutag", "offuall", "utagoff", "ualloff"], prefixes=["/", ".", "@", "#"]) & admin_filter)
+@app.on_message(filters.command(["stoputag", "stopuall", "offutag", "offuall"], prefixes=["/", ".", "@", "#"]) & admin_filter)
 async def stop_tagging(_, message):
     global SPAM_CHATS
     chat_id = message.chat.id
