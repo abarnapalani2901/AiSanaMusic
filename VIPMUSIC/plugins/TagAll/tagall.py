@@ -326,7 +326,7 @@ async def mention_allvc(client, message):
 
 
 
-@app.on_message(filters.command(["stoptag", "stoptagall", "canceltagall", "offtagall", "tagallstop", "stopvctag", "tagalloff", "stopvc", "stopvctag", "cancelvctag", "vctagstop", "vcstop"]))
+@app.on_message(filters.command(["stoptagall", "stopvctag"]))
 async def cancel_spam(client, message):
     if not message.chat.id in spam_chats:
         return await message.reply("𝐂𝐮𝐫𝐫𝐞𝐧𝐭𝐥𝐲 𝐈'𝐦 𝐍𝐨𝐭 𝐓𝐚𝐠𝐠𝐢𝐧𝐠 𝐁𝐚𝐛𝐲.")
