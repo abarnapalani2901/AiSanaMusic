@@ -77,4 +77,4 @@ coloredlogs
 aiosqlite
 SQLAlchemy
 pycryptodome   #jiosaavn
-werkzeug
+werkzeug==2.0.3
