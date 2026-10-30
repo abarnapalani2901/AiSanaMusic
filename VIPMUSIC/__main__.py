@@ -13,7 +13,7 @@ from VIPMUSIC.misc import sudo
 from VIPMUSIC.plugins import ALL_MODULES
 from VIPMUSIC.utils.database import get_banned_users, get_gbanned
 
-from keep_alive import keep_alive
+#from keep_alive import keep_alive
 from autorestart import autorestart
 
 
@@ -190,7 +190,7 @@ async def main():
 # ========================================================
 # KEEP ALIVE + AUTORESTART
 # ========================================================
-
+"""
 def start_services():
 
     # ----------------------------------------------------
@@ -205,7 +205,7 @@ def start_services():
         LOGGER("VIPMUSIC").error(
             f"Keep Alive error: {e}"
         )
-
+"""
     # ----------------------------------------------------
     # AUTORESTART SYSTEM
     # ----------------------------------------------------
