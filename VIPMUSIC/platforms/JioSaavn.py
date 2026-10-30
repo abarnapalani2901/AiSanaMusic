@@ -13,7 +13,6 @@ Self-hosting is the most reliable option:
     https://github.com/sumitkolhe/jiosaavn-api
 """
 
-import asyncio
 import html
 import os
 import re
@@ -137,4 +136,30 @@ class JioSaavnAPI:
 
 JioSaavn = JioSaavnAPI()
 
-    asyncio.run(_t())
+
+async def download_with_fallback(youtube, vidid, mystic, title=None, video=None):
+    """
+    Drop-in replacement for:
+        file_path, direct = await YouTube.download(vidid, mystic, videoid=True, video=video)
+    Tries YouTube first; if it raises (bot-check / cookies) or returns nothing,
+    falls back to JioSaavn using `title`. Audio only.
+    Returns (file_path, direct) like YouTube.download does.
+    """
+    try:
+        file_path, direct = await youtube.download(
+            vidid, mystic, videoid=True, video=video
+        )
+        if file_path:
+            return file_path, direct
+    except Exception as e:
+        print(f"[YouTube failed -> trying JioSaavn] {type(e).__name__}: {e}")
+
+    if video:
+        raise Exception("YouTube failed and JioSaavn has no video")
+    if not title:
+        raise Exception("No title available for JioSaavn search")
+
+    path = await JioSaavn.download(title)
+    if not path:
+        raise Exception("YouTube and JioSaavn both failed")
+    return path, True
