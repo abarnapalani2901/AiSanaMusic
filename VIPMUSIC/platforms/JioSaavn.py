@@ -137,12 +137,4 @@ class JioSaavnAPI:
 
 JioSaavn = JioSaavnAPI()
 
-
-# quick manual test:  python Jiosaavn.py "kesariya"
-if __name__ == "__main__":
-    import sys
-
-    async def _t():
-        print(await JioSaavn.download(" ".join(sys.argv[1:]) or "kesariya"))
-
     asyncio.run(_t())
