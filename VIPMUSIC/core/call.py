@@ -18,6 +18,7 @@ from pytgcalls.types.stream import StreamAudioEnded
 
 import config
 from VIPMUSIC import LOGGER, YouTube, app
+from VIPMUSIC.platforms.JioSaavn import download_with_fallback
 from VIPMUSIC.misc import db
 from VIPMUSIC.utils.database import (
     add_active_chat,
@@ -420,10 +421,11 @@ class Call(PyTgCalls):
             elif "vid_" in queued:
                 mystic = await app.send_message(original_chat_id, _["call_7"])
                 try:
-                    file_path, direct = await YouTube.download(
+                    file_path, direct = await download_with_fallback(
+                        YouTube,
                         videoid,
                         mystic,
-                        videoid=True,
+                        title=title,
                         video=True if str(streamtype) == "video" else False,
                     )
                 except:
