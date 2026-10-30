@@ -1,80 +1,75 @@
+# --- Core (installed first) ---
 pyrogram==2.0.106
 tgcrypto
-aiofiles
-aiohttp==3.9.3         # CUTE old and new
-asyncio==3.4.3         # CUTE old and  new
-bard
-beautifulsoup4
-blackpink
-deepai
-pytube
-motor
-dnspython==2.3.0       # CUTE old and new
-ffmpeg-python
-gitpython
-hachoir
-Faker
-pydub
-pycountry
-pornhub-api==0.2.0
-heroku3
-lyricsgenius
-apscheduler                
-opencv-python-headless==4.9.0.80
-pillow==9.5.0
-psutil
-wget
-pyfiglet
-qrcode
-pytz
-future==0.18.3        # CUTE, SHUKLA 1.0.0, 
-search_engine_parser
-# pyrofork # start react animation
 py-tgcalls==0.9.7
-pykeyboard
-pyshorteners
-python-dotenv
-pyyaml==6.0.1
-pyfiglet
-requests
-emojis
-speedtest-cli
-spotipy
 telethon==1.33.1
-telegraph==2.2.0
-unidecode
-yt-dlp
-youtube_search
-youtube-search-python
-gtts
-lexica-api==1.4.7
-httpx==0.25.2           # CUTE, SHUKLA =>0.28.1
-gpytranslate
-openai==0.28.0
-mpv
-moviepy
-#python-telegram-bot==21.1.1
-stripe==10.7.0
-mysql-connector-python==9.0.0
-telebot==0.0.5
-youtube_dl==2021.12.17  # from SHUKLA
-playwright
-bing_image_downloader
-bs4
+pykeyboard
+
+# --- Web / networking ---
+aiofiles
+aiohttp==3.9.3
+httpx==0.25.2
+requests
 cloudscraper
-flask==2.2.2   #keep_alive         # CUTE
+flask==2.2.2
+werkzeug==2.2.2          # must satisfy flask 2.2.2 (was 2.0.3 = conflict)
+dnspython==2.3.0
+
+# --- Database ---
+motor
 pymongo
-#pymongo[srv]==3.12.3
-# kurigram
-git+https://github.com/AsmSafone/SafoneAPI
-SafoneAPI
-async_pymongo #fed
-deep_translator #chatbot
-matplotlib==3.8.4 #botusage piechart
-# BioLink / extras
-regex
-coloredlogs
+async_pymongo
 aiosqlite
 SQLAlchemy
-# pycryptodome   #jiosaavn
-werkzeug==2.0.3
+mysql-connector-python==9.0.0
+
+# --- Media / downloaders ---
+yt-dlp
+pytube
+youtube_search
+youtube-search-python
+ffmpeg-python
+hachoir
+pydub
+moviepy
+opencv-python-headless==4.9.0.80
+pillow==9.5.0
+matplotlib==3.8.4
+gtts
+lyricsgenius
+spotipy
+pycryptodome
+
+# --- Utilities ---
+apscheduler
+beautifulsoup4
+Faker
+future==0.18.3
+gitpython
+heroku3
+pycountry
+pyfiglet
+psutil
+python-dotenv
+pytz
+pyyaml==6.0.1
+qrcode
+regex
+coloredlogs
+emojis
+speedtest-cli
+unidecode
+wget
+pyshorteners
+search_engine_parser
+telegraph==2.2.0
+deep_translator
+gpytranslate
+lexica-api==1.4.7
+bing_image_downloader
+blackpink
+deepai
+openai==0.28.0
+stripe==10.7.0
+playwright
+SafoneAPI
