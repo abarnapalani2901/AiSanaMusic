@@ -25,7 +25,7 @@ SoundCloud = SoundAPI()
 Spotify = SpotifyAPI()
 Resso = RessoAPI()
 Telegram = TeleAPI()
-#YouTube = YouTubeAPI()
+YouTube = YouTubeAPI()
 JioSaavn = JioSaavnAPI()
 
 # Correct Telethon initialization (no start here)
