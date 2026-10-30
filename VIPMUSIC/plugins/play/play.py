@@ -7,6 +7,7 @@ from pytgcalls.exceptions import NoActiveGroupCall
 from VIPMUSIC.utils.database import get_assistant
 import config
 from VIPMUSIC import Apple, Resso, SoundCloud, Spotify, Telegram, YouTube, app
+from VIPMUSIC.platforms.JioSaavn import download_with_fallback
 from VIPMUSIC.core.call import VIP
 from VIPMUSIC.misc import SUDOERS
 from VIPMUSIC.utils import seconds_to_min, time_to_seconds
@@ -798,8 +799,8 @@ async def stream(
                     db[chat_id] = []
                 status = True if video else None
                 try:
-                    file_path, direct = await YouTube.download(
-                        vidid, mystic, video=status, videoid=True
+                    file_path, direct = await download_with_fallback(
+                        YouTube, vidid, mystic, title=title, video=status
                     )
                 except:
                     raise AssistantErr(_["play_14"])
@@ -862,8 +863,8 @@ async def stream(
         thumbnail = result["thumb"]
         status = True if video else None
         try:
-            file_path, direct = await YouTube.download(
-                vidid, mystic, videoid=True, video=status
+            file_path, direct = await download_with_fallback(
+                YouTube, vidid, mystic, title=title, video=status
             )
         except:
             raise AssistantErr(_["play_14"])
@@ -1171,4 +1172,3 @@ async def get_thumb(vidid):
     except Exception as e:
         return config.YOUTUBE_IMG_URL
 """
-
