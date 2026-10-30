@@ -1,17 +1,17 @@
-# keep_alive.py
+   # keep_alive.py
+   import os
+   from flask import Flask
+   from threading import Thread
 
-from flask import Flask
-from threading import Thread
+   app = Flask(__name__)
 
-app = Flask(__name__)
+   @app.route('/')
+   def home():
+       return "Bot is running on Render!"
 
-@app.route('/')
-def home():
-    return "Bot is running on Render!"
+   def run():
+       app.run(host='0.0.0.0', port=int(os.environ.get("PORT", 8080)))
 
-def run():
-    app.run(host='0.0.0.0', port=8080)
-
-def keep_alive():
-    t = Thread(target=run)
-    t.start()
+   def keep_alive():
+       t = Thread(target=run)
+       t.start()
