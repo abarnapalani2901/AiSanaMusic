@@ -1,4 +1,28 @@
-# Youtube.py (ULTIMATE FIXED VERSION - Proper Netscape format)
+# Youtube.py (FIXED - non-blocking downloads, bounded timeouts, background cookie refresh)
+#
+# Key behaviour:
+#   * download_song / download_video NEVER hang: API attempt and yt-dlp attempt each
+#     have their own timeout, and yt-dlp runs in a worker thread (it no longer blocks
+#     the event loop, so asyncio.wait_for in JioSaavn.download_with_fallback can fire).
+#   * Cookie refresh (yt-dlp browser / Playwright) happens ONLY in a background task,
+#     with a cooldown. It is never awaited inside the /play path.
+#   * On any failure download_* returns None -> YouTube.download returns (None, False)
+#     -> download_with_fallback switches to JioSaavn.
+#
+# Environment variables (all optional):
+#   API_URL, API_KEY                 Railway download API
+#   YT_EMAIL, YT_PASSWORD            Google login used ONLY by the Playwright cookie refresh
+#   YTDLP_PROXIES, PLAYWRIGHT_PROXIES  comma separated
+#   YT_API_TIMEOUT                   seconds for the Railway API attempt (default 10)
+#   YT_YTDLP_TIMEOUT                 seconds for the yt-dlp attempt (default 10)
+#   YT_USE_YTDLP                     "0" = skip yt-dlp entirely (default "1")
+#   YT_YTDLP_REQUIRE_COOKIES         "1" = skip yt-dlp if no cookie file (default "1")
+#   COOKIE_REFRESH_COOLDOWN          seconds between background refresh attempts (default 1800)
+#   AUTO_REFRESH_COOKIES             "1" (default) or "0"
+#
+# IMPORTANT: set YT_DOWNLOAD_TIMEOUT (read by JioSaavn.py) HIGHER than
+# YT_API_TIMEOUT + YT_YTDLP_TIMEOUT, e.g. YT_DOWNLOAD_TIMEOUT=25.
+
 import asyncio
 import os
 import re
@@ -12,7 +36,6 @@ from youtubesearchpython.__future__ import VideosSearch
 from VIPMUSIC.utils.database import is_on_off
 from VIPMUSIC import app
 from VIPMUSIC.utils.formatters import time_to_seconds
-import os
 import glob
 import random
 import logging
@@ -38,24 +61,41 @@ import io
 API_URL = os.getenv("API_URL", "")
 API_KEY = os.getenv("API_KEY", "")
 
-# YouTube login (used when auto-refreshing cookies)
-YT_EMAIL = os.getenv("YT_EMAIL", "sthfsuh@gmail.com")
-YT_PASSWORD = os.getenv("YT_PASSWORD", "143@Frnds")
+# YouTube login (used only by background Playwright cookie refresh).
+# NEVER hardcode credentials here - set them as environment variables.
+YT_EMAIL = os.getenv("YT_EMAIL", "")
+YT_PASSWORD = os.getenv("YT_PASSWORD", "")
 
-# Railway deployment: ALWAYS enable auto-refresh cookies
-AUTO_REFRESH_COOKIES = True  # Forced ON for Railway
+AUTO_REFRESH_COOKIES = os.getenv("AUTO_REFRESH_COOKIES", "1") == "1"
 
 # Proxies (optional - set in Railway env vars)
 YTDLP_PROXIES = os.getenv("YTDLP_PROXIES", "")
 PLAYWRIGHT_PROXIES = os.getenv("PLAYWRIGHT_PROXIES", "")
 
-# Cookie directory (Railway-safe path)
+# Time budgets (seconds)
+API_TIMEOUT = int(os.getenv("YT_API_TIMEOUT", "10"))
+YTDLP_TIMEOUT = int(os.getenv("YT_YTDLP_TIMEOUT", "10"))
+# Fail-fast switches (so JioSaavn fallback starts immediately):
+#   YT_USE_YTDLP=0            -> never try yt-dlp, go to JioSaavn right after the API fails
+#   YT_YTDLP_REQUIRE_COOKIES=1 -> skip yt-dlp when no cookie file exists (default)
+YTDLP_ENABLED = os.getenv("YT_USE_YTDLP", "1") == "1"
+YTDLP_REQUIRE_COOKIES = os.getenv("YT_YTDLP_REQUIRE_COOKIES", "1") == "1"
+REFRESH_COOLDOWN = int(os.getenv("COOKIE_REFRESH_COOLDOWN", "1800"))
+REFRESH_TIMEOUT = 240
+
+# Directories
+DOWNLOAD_DIR = "downloads"
+os.makedirs(DOWNLOAD_DIR, exist_ok=True)
+
 COOKIES_DIR = os.path.join(os.getcwd(), "cookies")
 os.makedirs(COOKIES_DIR, exist_ok=True)
 
-# Railway temp directory cleanup
 TMP_DIR = os.path.join(os.getcwd(), "tmp")
 os.makedirs(TMP_DIR, exist_ok=True)
+
+AUDIO_EXTS = ["mp3", "m4a", "webm", "opus", "ogg"]
+VIDEO_EXTS = ["mp4", "mkv", "webm"]
+
 
 # Logger helper (Railway compatible)
 def get_logger(name: str):
@@ -70,209 +110,180 @@ def get_logger(name: str):
         log.setLevel(logging.INFO)
         return log
 
+
 logger = get_logger("HeartBeat/platforms/Youtube.py")
 
-# ================= FIXED VERIFY COOKIES FUNCTION =================
+
+# ================= VERIFY COOKIES FUNCTION =================
 def verify_cookies_file(filename: str) -> bool:
     """Verify cookies file has proper YouTube cookies in Netscape format"""
     try:
         if not os.path.exists(filename):
             logger.error(f"Cookies file does not exist: {filename}")
             return False
-        
+
         with open(filename, 'r', encoding='utf-8') as f:
             content = f.read()
-            
-        # Check if it's Netscape format (should have youtube.com entries)
+
         if 'youtube.com' not in content and '.youtube.com' not in content:
             logger.error("No youtube.com domain in cookies file")
             return False
-            
-        # Check for required YouTube cookies (essential for authentication)
+
         required_cookies = ['__Secure-YEC', '__Secure-YENID', 'PREF', 'VISITOR_INFO1_LIVE']
-        found_cookies = []
-        
-        for cookie_name in required_cookies:
-            if cookie_name in content:
-                found_cookies.append(cookie_name)
-        
-        if len(found_cookies) < 2:  # Need at least 2 of the critical cookies
+        found_cookies = [c for c in required_cookies if c in content]
+
+        if len(found_cookies) < 2:
             logger.warning(f"Missing important cookies. Found: {found_cookies}")
-            # Don't fail immediately, just warn
-            
-        # Check format - should not be JSON
+
         if content.strip().startswith('{') or '"domain"' in content:
             logger.error("Cookies file appears to be JSON format, not Netscape")
             return False
-            
-        # Check for proper Netscape format (tabs between fields)
+
         lines = content.strip().split('\n')
         valid_lines = 0
         for line in lines:
             if line.startswith('#') or not line.strip():
                 continue
-            # Allow 6 or 7 tabs (some variations exist)
             if '\t' not in line:
                 logger.error(f"Invalid Netscape format line (no tabs): {line[:100]}")
                 return False
             valid_lines += 1
-            
+
         if valid_lines < 3:
             logger.error(f"Too few valid cookie lines: {valid_lines}")
             return False
-                
+
         logger.info(f"✅ Cookies file verified: {filename} (found {found_cookies})")
         return True
-        
+
     except Exception as e:
         logger.error(f"Error verifying cookies file: {e}")
         return False
 
-# ================= ULTIMATE FIXED NETSCAPE COOKIE FORMAT =================
+
+# ================= NETSCAPE COOKIE WRITER =================
 def write_netscape_cookies(cookies, filename):
-    """Write cookies in STRICTLY CORRECT Netscape format for yt-dlp"""
+    """Write cookies in strict Netscape format (7 tab-separated fields) for yt-dlp"""
     with open(filename, "w", newline='', encoding='utf-8') as f:
         f.write("# Netscape HTTP Cookie File\n")
         f.write("# This file was generated by YouTube Bot - Railway\n")
         f.write("# https://www.youtube.com\n\n")
-        
+
         for cookie in cookies:
             try:
                 domain = cookie.get('domain', '')
                 if not domain:
                     continue
-                
-                # Keep ALL cookies including google.com ones
-                # Filter only if absolutely necessary
+
                 if 'gstatic.com' in domain or 'doubleclick.net' in domain:
                     continue
-                
-                # Get expiration (handle various formats)
+
                 expires = cookie.get('expires', 0)
-                if expires == 0:
-                    expires = int(time.time()) + 86400 * 365  # 1 year default
-                elif expires > 1000000000000:  # Probably milliseconds
+                if expires == 0 or expires == -1:
+                    expires = int(time.time()) + 86400 * 365
+                elif expires > 1000000000000:
                     expires = int(expires / 1000)
-                
-                # FIXED: STRICT Netscape format - 7 TAB-SEPARATED fields
-                # 1. domain (with leading dot for domain cookies, without for host-only)
-                # 2. flag (TRUE if domain cookie, FALSE if host-only) - REVERSED LOGIC
-                # 3. path
-                # 4. secure (TRUE/FALSE)
-                # 5. expiration (Unix timestamp)
-                # 6. name
-                # 7. value
-                
-                # Determine flag based on domain format
-                if domain.startswith('.'):
-                    # Domain cookie (cookies for all subdomains)
-                    flag = "TRUE"  # This is CORRECT for domain cookies
-                else:
-                    # Host-only cookie
-                    flag = "FALSE"  # This is CORRECT for host-only
-                
+
+                flag = "TRUE" if domain.startswith('.') else "FALSE"
                 path = cookie.get('path', '/')
                 secure = "TRUE" if cookie.get('secure', False) else "FALSE"
                 expires_str = str(int(expires))
                 name = cookie.get('name', '')
                 value = cookie.get('value', '')
-                
-                # Skip cookies without name or value
+
                 if not name or not value:
                     continue
-                
-                # Handle special characters in value
+
                 if '\t' in value or '\n' in value:
                     value = value.replace('\t', ' ').replace('\n', ' ')
-                
-                # Write EXACTLY 7 tab-separated fields
+
                 f.write(f"{domain}\t{flag}\t{path}\t{secure}\t{expires_str}\t{name}\t{value}\n")
-                
+
             except Exception as e:
                 logger.warning(f"Skipping cookie due to error: {e}")
                 continue
-    
-    # Verify we wrote something
+
     try:
         with open(filename, 'r') as f:
             lines = f.readlines()
             cookie_lines = [l for l in lines if not l.startswith('#') and l.strip()]
             if len(cookie_lines) > 0:
                 logger.info(f"✓ Wrote {len(cookie_lines)} cookies to {filename}")
-                
-                # Debug: print first cookie line
-                if cookie_lines:
-                    logger.debug(f"First cookie line: {cookie_lines[0][:200]}")
-                
                 return True
-            else:
-                logger.error(f"✗ No cookies written to {filename}")
-                return False
+            logger.error(f"✗ No cookies written to {filename}")
+            return False
     except Exception as e:
         logger.error(f"✗ Failed to verify cookie file: {e}")
         return False
 
-# ================= SIMPLIFIED YT-DLP COOKIE EXTRACTION =================
+
+# ================= YT-DLP BROWSER COOKIE EXTRACTION (background only) =================
 async def refresh_cookies_ytdlp():
-    """Simple yt-dlp cookie extraction"""
-    logger.info("🚀 Using yt-dlp browser cookie extraction")
-    
+    """Extract cookies from a local Chrome profile using yt-dlp.
+    Only works where a browser profile exists (not on a bare Railway container)."""
+    logger.info("🚀 Trying yt-dlp browser cookie extraction")
+
     timestamp = int(time.time())
     cookie_filename = os.path.join(COOKIES_DIR, f"ytdlp_cookie_{timestamp}.txt")
-    
+
+    cmd = [
+        "yt-dlp",
+        "--cookies-from-browser", "chrome",
+        "--cookies", cookie_filename,          # correct option: dumps the cookie jar to file
+        "--skip-download",
+        "--no-warnings",
+        "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+    ]
+
+    process = None
     try:
-        # Simple command to get cookies
-        cmd = [
-            "yt-dlp",
-            "--cookies-from-browser", "chrome",
-            "--get-cookies", cookie_filename,
-            "https://www.youtube.com",
-            "--no-check-certificate"
-        ]
-        
         process = await asyncio.create_subprocess_exec(
             *cmd,
             stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE
+            stderr=asyncio.subprocess.PIPE,
         )
-        
-        stdout, stderr = await process.communicate()
-        
-        if process.returncode == 0:
-            logger.info("✅ Successfully extracted cookies with yt-dlp")
-            
-            # Verify the cookies file
+        try:
+            stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=40)
+        except asyncio.TimeoutError:
+            try:
+                process.kill()
+            except Exception:
+                pass
+            logger.warning("yt-dlp cookie extraction timed out")
+            return None
+
+        # yt-dlp may exit non-zero on the probe URL but still dump cookies, so check the file.
+        if os.path.exists(cookie_filename) and os.path.getsize(cookie_filename) > 100:
             if verify_cookies_file(cookie_filename):
-                # Send to log group
+                logger.info("✅ Extracted cookies with yt-dlp")
                 try:
                     with open(cookie_filename, "rb") as f:
                         await send_to_log_group(
                             file_obj=f,
-                            caption="🚀 **yt-dlp Browser Cookies**\n\n✅ Extracted directly from browser\n✅ Perfect Netscape format\n✅ Ready for downloads\n\n#Railway #YouTube #Cookies"
+                            caption="🚀 **yt-dlp Browser Cookies**\n\n✅ Extracted directly from browser\n✅ Netscape format\n\n#YouTube #Cookies"
                         )
                 except Exception as e:
                     logger.error(f"Failed to send cookies to log group: {e}")
-                    
                 return cookie_filename
-            else:
-                logger.error("❌ yt-dlp cookies verification failed")
-                return None
-        else:
-            error_msg = stderr.decode()[:200] if stderr else "Unknown error"
-            logger.warning(f"yt-dlp cookie extraction failed: {error_msg}")
+            logger.error("❌ yt-dlp cookies verification failed")
             return None
-            
+
+        error_msg = stderr.decode(errors="ignore")[:200] if stderr else "no cookie file produced"
+        logger.warning(f"yt-dlp cookie extraction failed: {error_msg}")
+        return None
+
     except Exception as e:
         logger.error(f"yt-dlp cookie extraction error: {e}")
         return None
 
-# ================= ULTIMATE FIXED PLAYWRIGHT METHOD =================
+
+# ================= PLAYWRIGHT COOKIE REFRESH (background only) =================
 async def refresh_cookies_playwright_fixed():
-    """ULTIMATE FIXED Playwright method with proper Netscape format"""
+    """Playwright login -> Netscape cookie file. SLOW (minutes). Background only."""
     log = get_logger("refresh_cookies_playwright_fixed")
-    
+
     if not YT_EMAIL or not YT_PASSWORD:
-        raise Exception("YT_EMAIL and YT_PASSWORD must be set in Railway environment variables")
+        raise Exception("YT_EMAIL and YT_PASSWORD must be set as environment variables")
 
     if not LOG_GROUP_ID:
         raise Exception("LOG_GROUP_ID must be set for Gmail verification")
@@ -288,7 +299,6 @@ async def refresh_cookies_playwright_fixed():
 
     try:
         async with async_playwright() as p:
-            # Launch browser with minimal args
             browser = await p.chromium.launch(
                 headless=True,
                 args=[
@@ -297,67 +307,57 @@ async def refresh_cookies_playwright_fixed():
                     "--disable-dev-shm-usage",
                 ],
                 proxy={"server": proxy} if proxy else None,
-                timeout=180000  # 3 minute timeout
+                timeout=60000,
             )
-            
+
             context = await browser.new_context(
                 user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
                 viewport={"width": 1920, "height": 1080}
             )
-            
+
             page = await context.new_page()
 
-            # SIMPLIFIED: Go directly to YouTube (might already be logged in)
             await page.goto("https://www.youtube.com", timeout=120000)
             await page.wait_for_timeout(5000)
-            
-            # Check if we're already logged in
+
             try:
                 avatar_button = await page.query_selector('button#avatar-btn')
                 if not avatar_button:
-                    # Not logged in, try login
                     log.info("Not logged in, attempting login...")
-                    
-                    # Click sign in button
+
                     try:
                         signin_button = await page.query_selector('a[href*="accounts.google.com"]')
                         if signin_button:
                             await signin_button.click()
                             await page.wait_for_timeout(5000)
-                    except:
-                        # Go directly to login
+                    except Exception:
                         await page.goto("https://accounts.google.com/ServiceLogin?service=youtube", timeout=60000)
                         await page.wait_for_timeout(5000)
-                    
-                    # Try to enter email
+
                     try:
                         email_field = await page.wait_for_selector('input[type="email"], #identifierId', timeout=10000)
                         await email_field.fill(YT_EMAIL)
                         await page.wait_for_timeout(1000)
-                        
-                        # Click next
+
                         next_button = await page.query_selector('button:has-text("Next"), #identifierNext')
                         if next_button:
                             await next_button.click()
                             await page.wait_for_timeout(5000)
-                    except:
+                    except Exception:
                         pass
-                    
-                    # Try to enter password
+
                     try:
                         await page.wait_for_selector('input[type="password"]', timeout=10000)
                         await page.fill('input[type="password"]', YT_PASSWORD)
                         await page.wait_for_timeout(1000)
-                        
-                        # Click next
+
                         next_button = await page.query_selector('button:has-text("Next"), #passwordNext')
                         if next_button:
                             await next_button.click()
                             await page.wait_for_timeout(10000)
-                    except:
+                    except Exception:
                         pass
-                    
-                    # Handle 2FA if present
+
                     try:
                         code_input = await page.query_selector('input[type="tel"], input[aria-label*="code"]')
                         if code_input:
@@ -365,48 +365,42 @@ async def refresh_cookies_playwright_fixed():
                             verification_code = f"{random.randint(100000, 999999)}"
                             await send_to_log_group(verification_code=verification_code)
                             verification_code_sent = True
-                            
+
                             log.info("⏳ Waiting 45s for manual verification...")
                             await page.wait_for_timeout(45000)
-                    except:
+                    except Exception:
                         pass
-            except:
+            except Exception:
                 pass
 
-            # Final wait on YouTube
             await page.goto("https://www.youtube.com", timeout=60000)
             await page.wait_for_timeout(10000)
-            
-            # Get cookies from ALL domains
+
             cookies = await context.cookies()
-            
+
             if not cookies:
+                await browser.close()
                 raise Exception("No cookies captured")
-            
-            # Write cookies using ULTIMATE FIXED function
+
             success = write_netscape_cookies(cookies, cookie_filename)
-            
+
             await browser.close()
-            
+
             if success:
-                # Send to log group
                 try:
                     with open(cookie_filename, "rb") as f:
                         await send_to_log_group(
                             file_obj=f,
-                            caption="🔄 **Fresh YouTube Cookies**\n\n✅ Login successful\n✅ Netscape format verified\n✅ Ready for downloads\n\n#Railway #YouTube #Cookies"
+                            caption="🔄 **Fresh YouTube Cookies**\n\n✅ Login successful\n✅ Netscape format\n\n#YouTube #Cookies"
                         )
                 except Exception as e:
                     log.error(f"Failed to send cookies: {e}")
-                
-                # Verify the cookies
+
                 if verify_cookies_file(cookie_filename):
                     log.info(f"✅ Playwright cookies saved and verified: {cookie_filename}")
-                    return cookie_filename
                 else:
-                    # Still return it even if verification fails
-                    log.warning(f"⚠️ Cookie verification failed but returning file anyway: {cookie_filename}")
-                    return cookie_filename
+                    log.warning(f"⚠️ Cookie verification failed but keeping file: {cookie_filename}")
+                return cookie_filename
             else:
                 raise Exception("Failed to write cookies file")
 
@@ -416,10 +410,10 @@ async def refresh_cookies_playwright_fixed():
             log.info("Verification code was sent - check log group")
         raise
 
-# ================= SIMPLE YT-DLP COOKIE METHOD =================
+
 async def get_cookies_simple():
-    """Simple method: Try multiple cookie extraction methods"""
-    # Try yt-dlp browser extraction first (most reliable)
+    """Try yt-dlp browser extraction, then Playwright, then any existing file.
+    SLOW - call only from the background refresh task."""
     try:
         cookie_file = await refresh_cookies_ytdlp()
         if cookie_file:
@@ -427,8 +421,7 @@ async def get_cookies_simple():
             return cookie_file
     except Exception as e:
         logger.error(f"yt-dlp cookie extraction failed: {e}")
-    
-    # Fallback to Playwright
+
     try:
         cookie_file = await refresh_cookies_playwright_fixed()
         if cookie_file:
@@ -436,63 +429,85 @@ async def get_cookies_simple():
             return cookie_file
     except Exception as e:
         logger.error(f"Playwright cookie extraction failed: {e}")
-    
-    # If all else fails, check for any existing cookie file
+
     existing = cookie_txt_file()
     if existing:
         logger.warning(f"Using existing cookie file (may not work): {existing}")
         return existing
-    
+
     raise Exception("Failed to get YouTube cookies from all methods")
 
-# ================= RAILWAY YT-DLP OPTIONS =================
-def get_base_ytdlp_opts(cookie_file: str):
-    return {
-        "outtmpl": "downloads/%(id)s.%(ext)s",
-        "quiet": True,
-        "geo_bypass": True,
-        "nocheckcertificate": True,
-        "cookiefile": cookie_file,
-        "no_warnings": True,
-        "source_address": "0.0.0.0",
-        "socket_timeout": 20,
-        "retries": 50,
-        "fragment_retries": 50,
-        "concurrent_fragment_downloads": 3,
-    }
 
-# ========== RAILWAY PROXY HELPERS ==========
+# ================= BACKGROUND COOKIE REFRESH SCHEDULER =================
+_bg_refresh_task = None
+_last_refresh_attempt = 0.0
+
+
+async def _refresh_in_background():
+    global _last_refresh_attempt
+    _last_refresh_attempt = time.time()
+    try:
+        await asyncio.wait_for(get_cookies_simple(), timeout=REFRESH_TIMEOUT)
+        logger.info("🔄 Background cookie refresh finished")
+    except asyncio.TimeoutError:
+        logger.error(f"Background cookie refresh timed out after {REFRESH_TIMEOUT}s")
+    except Exception as e:
+        logger.error(f"Background cookie refresh failed: {type(e).__name__}: {e}")
+
+
+def schedule_cookie_refresh():
+    """Fire-and-forget cookie refresh. Never blocks the caller, never runs twice
+    at once, and respects a cooldown so a failing login is not retried on every /play."""
+    global _bg_refresh_task
+    if not AUTO_REFRESH_COOKIES:
+        return
+    if _bg_refresh_task is not None and not _bg_refresh_task.done():
+        return
+    if time.time() - _last_refresh_attempt < REFRESH_COOLDOWN:
+        return
+    try:
+        loop = asyncio.get_running_loop()
+    except RuntimeError:
+        return
+    logger.info("🔄 Scheduling background cookie refresh")
+    _bg_refresh_task = loop.create_task(_refresh_in_background())
+
+
+# ========== PROXY HELPERS ==========
 def _parse_proxy_list(proxy_env: str):
     if not proxy_env:
         return []
-    parts = [p.strip() for p in proxy_env.split(",") if p.strip()]
-    return parts
+    return [p.strip() for p in proxy_env.split(",") if p.strip()]
+
 
 YTDLP_PROXY_POOL = _parse_proxy_list(YTDLP_PROXIES)
 PLAYWRIGHT_PROXY_POOL = _parse_proxy_list(PLAYWRIGHT_PROXIES)
+
 
 def choose_random_proxy(pool):
     if not pool:
         return None
     return random.choice(pool)
 
-# ========== RAILWAY GMAIL VERIFICATION SCREENSHOT ==========
+
+# ========== GMAIL VERIFICATION SCREENSHOT ==========
 async def generate_verification_screenshot(verification_code: str):
     try:
         width, height = 400, 200
         image = Image.new('RGB', (width, height), color='white')
         draw = ImageDraw.Draw(image)
-        
+
         try:
             font = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", 48)
-        except:
+        except Exception:
             font = ImageFont.load_default()
-        
-        draw.text((50, 30), "🔐 Gmail Verification", fill='blue', font=font)
+
+        draw.text((50, 30), "Gmail Verification", fill='blue', font=font)
         draw.text((50, 90), f"Code: {verification_code}", fill='red', font=font)
         draw.text((50, 140), f"Time: {datetime.datetime.now().strftime('%H:%M:%S')}", fill='black', font=font)
-        
+
         img_buffer = io.BytesIO()
+        img_buffer.name = "verification.png"
         image.save(img_buffer, format='PNG')
         img_buffer.seek(0)
         return img_buffer
@@ -500,12 +515,13 @@ async def generate_verification_screenshot(verification_code: str):
         logger.error(f"Failed to generate verification screenshot: {e}")
         return None
 
-# ========== RAILWAY LOG GROUP SENDER ==========
+
+# ========== LOG GROUP SENDER ==========
 async def send_to_log_group(file_obj=None, caption: str = None, verification_code: str = None):
     if not LOG_GROUP_ID:
         logger.warning("LOG_GROUP_ID not configured, skipping log group send")
         return
-    
+
     try:
         if verification_code:
             screenshot = await generate_verification_screenshot(verification_code)
@@ -513,316 +529,282 @@ async def send_to_log_group(file_obj=None, caption: str = None, verification_cod
                 await app.send_photo(
                     chat_id=LOG_GROUP_ID,
                     photo=screenshot,
-                    caption=f"🔐 **Gmail Login Verification**\n\nEnter this code: `{verification_code}`\n\n👆 Select this number on your device to complete login.\n\n#Railway #YouTubeCookies"
+                    caption=f"🔐 **Gmail Login Verification**\n\nEnter this code: `{verification_code}`\n\n👆 Select this number on your device to complete login.\n\n#YouTubeCookies"
                 )
                 logger.info(f"Verification screenshot sent to log group: {verification_code}")
-        
+
         elif file_obj and caption:
             await app.send_document(
                 chat_id=LOG_GROUP_ID,
                 document=file_obj,
                 caption=caption,
-                #parse_mode="Markdown"
             )
             logger.info("Cookies.txt sent to log group")
-            
+
     except Exception as e:
         logger.error(f"Failed to send to log group: {e}")
 
-# ========== RAILWAY COOKIE FILE MANAGER ==========
+
+# ========== COOKIE FILE MANAGER ==========
 def cookie_txt_file():
-    """Get the best cookie file available"""
+    """Get the best cookie file available (or None). Fast, no network."""
     try:
         cookies_files = [f for f in os.listdir(COOKIES_DIR) if f.endswith(".txt")]
-        
+
         if not cookies_files:
-            logger.info("No cookie files found")
             return None
-        
-        # Sort by modification time (newest first)
+
         cookies_files.sort(key=lambda x: os.path.getmtime(os.path.join(COOKIES_DIR, x)), reverse=True)
-        
-        # Try each cookie file from newest to oldest
+
         for cookie_file_name in cookies_files:
             cookie_file_path = os.path.join(COOKIES_DIR, cookie_file_name)
-            
-            # Check if file is not empty
+
             if os.path.getsize(cookie_file_path) < 100:
-                logger.warning(f"Cookie file too small: {cookie_file_path}")
                 continue
-            
-            # Check age (skip if older than 2 days)
+
             file_age = time.time() - os.path.getmtime(cookie_file_path)
             if file_age > 172800:  # 2 days
-                logger.info(f"Cookie file is {file_age/3600:.1f} hours old, may need refresh")
                 continue
-            
-            # Try verification
+
             if verify_cookies_file(cookie_file_path):
-                logger.info(f"✅ Using verified cookie file: {cookie_file_path}")
                 return cookie_file_path
-            else:
-                logger.warning(f"❌ Cookie file failed verification: {cookie_file_path}")
-        
-        # If no verified file found, return the newest one anyway
-        if cookies_files:
-            newest = os.path.join(COOKIES_DIR, cookies_files[0])
-            logger.warning(f"Using newest cookie file without verification: {newest}")
-            return newest
-            
+
+        # Nothing fresh/verified: return the newest non-empty one anyway
+        for cookie_file_name in cookies_files:
+            newest = os.path.join(COOKIES_DIR, cookie_file_name)
+            if os.path.getsize(newest) >= 100:
+                logger.warning(f"Using newest cookie file without verification: {newest}")
+                return newest
+
         return None
-            
+
     except Exception as e:
         logger.error(f"Error getting cookie file: {e}")
         return None
 
-# ========== RAILWAY API HELPER WITH AUTO-REFRESH ==========
-async def _post_with_api_refresh(url: str, json_payload: dict, headers: dict, session: aiohttp.ClientSession, retries: int = 2):
+
+# ========== RAILWAY API HELPER ==========
+async def _post_with_api_refresh(url: str, json_payload: dict, headers: dict, session: aiohttp.ClientSession, retries: int = 1):
+    """POST to the Railway API. A 401 schedules a BACKGROUND cookie refresh and is
+    returned to the caller (who then falls through to yt-dlp). Only network errors retry."""
+    last_error = None
     attempt = 0
     while attempt <= retries:
         attempt += 1
         try:
-            resp = await session.post(url, json=json_payload, headers=headers, timeout=aiohttp.ClientTimeout(total=60))
-            
-            if resp.status == 401 and AUTO_REFRESH_COOKIES:
-                logger.warning(f"🚂 RAILWAY API 401 - refreshing cookies (attempt {attempt}/{retries+1})")
-                await get_cookies_simple()
-                continue
-            
+            resp = await session.post(url, json=json_payload, headers=headers)
+
+            if resp.status == 401:
+                logger.warning("🚂 RAILWAY API 401 - scheduling background cookie refresh")
+                schedule_cookie_refresh()
+
             return resp
         except Exception as e:
-            logger.error(f"🚂 RAILWAY API POST error (attempt {attempt}): {e}")
-            if AUTO_REFRESH_COOKIES and attempt <= retries:
-                await get_cookies_simple()
-    
-    raise Exception("API requests failed after retries")
+            last_error = e
+            logger.error(f"🚂 RAILWAY API POST error (attempt {attempt}): {type(e).__name__}: {e}")
 
-# ========== RAILWAY DOWNLOAD FUNCTIONS ==========
-async def download_song(link: str) -> str:
-    video_id = link.split('v=')[-1].split('&')[0] if 'v=' in link else link
-    logger.info(f"🎵 RAILWAY [AUDIO] {video_id}")
+    raise Exception(f"API requests failed after retries: {last_error}")
 
-    DOWNLOAD_DIR = "downloads"
-    os.makedirs(DOWNLOAD_DIR, exist_ok=True)
-    
-    # Check if file already exists with any extension
-    existing_files = glob.glob(os.path.join(DOWNLOAD_DIR, f"{video_id}.*"))
-    if existing_files:
-        logger.info(f"🎵 File already exists: {existing_files[0]}")
-        return existing_files[0]
 
-    # API FIRST (with Railway auto-refresh)
-    if API_URL and API_KEY:
+# ========== DOWNLOAD HELPERS ==========
+def _extract_video_id(link: str) -> str:
+    return link.split('v=')[-1].split('&')[0] if 'v=' in link else link
+
+
+def _existing_file(video_id: str, kind: str):
+    """Return an already-downloaded COMPLETE file for this id, ignoring partial files."""
+    exts = AUDIO_EXTS if kind == "audio" else VIDEO_EXTS
+    for ext in exts:
+        p = os.path.join(DOWNLOAD_DIR, f"{video_id}.{ext}")
         try:
-            async with aiohttp.ClientSession() as session:
-                payload = {"url": video_id, "type": "audio"}
-                headers = {"Content-Type": "application/json", "X-API-KEY": API_KEY}
-                resp = await _post_with_api_refresh(f"{API_URL}/download", payload, headers, session)
-                
-                if resp.status != 200:
-                    raise Exception(f"API error: {resp.status}")
-                
-                data = await resp.json()
-                if data.get("status") != "success":
-                    raise Exception(f"API response error: {data}")
+            if os.path.exists(p) and os.path.getsize(p) > 0:
+                return p
+        except OSError:
+            continue
+    return None
 
-                download_link = f"{API_URL}{data['download_url']}"
-                async with session.get(download_link) as file_response:
-                    # Determine file extension from content type
-                    content_type = file_response.headers.get('Content-Type', '')
-                    ext = 'mp3' if 'mp3' in content_type else 'webm'
-                    file_path = os.path.join(DOWNLOAD_DIR, f"{video_id}.{ext}")
-                    
-                    with open(file_path, "wb") as f:
-                        async for chunk in file_response.content.iter_chunked(8192):
-                            f.write(chunk)
 
-            logger.info(f"🎵 RAILWAY [API AUDIO] SUCCESS: {video_id}")
-            return file_path
+async def _download_via_api(video_id: str, kind: str):
+    """Railway API attempt. Returns file path or None. Bounded by API_TIMEOUT."""
+    if not (API_URL and API_KEY):
+        return None
 
-        except Exception as e:
-            logger.warning(f"🚂 RAILWAY [API AUDIO FAILED] {e}")
+    tmp = None
+    try:
+        timeout = aiohttp.ClientTimeout(total=API_TIMEOUT)
+        async with aiohttp.ClientSession(timeout=timeout) as session:
+            payload = {"url": video_id, "type": kind}
+            headers = {"Content-Type": "application/json", "X-API-KEY": API_KEY}
+            resp = await _post_with_api_refresh(f"{API_URL}/download", payload, headers, session)
 
-    # YT-DLP FALLBACK
+            if resp.status != 200:
+                raise Exception(f"API error: {resp.status}")
+
+            data = await resp.json()
+            if data.get("status") != "success":
+                raise Exception(f"API response error: {data}")
+
+            download_link = f"{API_URL}{data['download_url']}"
+            async with session.get(download_link) as file_response:
+                if file_response.status != 200:
+                    raise Exception(f"API file error: {file_response.status}")
+
+                content_type = file_response.headers.get('Content-Type', '').lower()
+                if kind == "audio":
+                    ext = 'mp3' if ('mp3' in content_type or 'mpeg' in content_type) else 'webm'
+                else:
+                    ext = 'mp4' if 'mp4' in content_type else 'mkv'
+
+                file_path = os.path.join(DOWNLOAD_DIR, f"{video_id}.{ext}")
+                tmp = file_path + ".part"
+
+                with open(tmp, "wb") as f:
+                    async for chunk in file_response.content.iter_chunked(8192):
+                        f.write(chunk)
+
+        if not os.path.exists(tmp) or os.path.getsize(tmp) == 0:
+            raise Exception("API returned an empty file")
+
+        os.replace(tmp, file_path)
+        logger.info(f"🎵 RAILWAY [API {kind.upper()}] SUCCESS: {video_id}")
+        return file_path
+
+    except asyncio.TimeoutError:
+        logger.warning(f"🚂 RAILWAY [API {kind.upper()} TIMED OUT after {API_TIMEOUT}s]")
+    except Exception as e:
+        logger.warning(f"🚂 RAILWAY [API {kind.upper()} FAILED] {type(e).__name__}: {e}")
+
+    if tmp and os.path.exists(tmp):
+        try:
+            os.remove(tmp)
+        except OSError:
+            pass
+    return None
+
+
+async def _download_via_ytdlp(link: str, video_id: str, kind: str):
+    """yt-dlp attempt. Runs in a worker thread so the event loop is never blocked,
+    and is bounded by YTDLP_TIMEOUT. Returns file path or None."""
+    if not YTDLP_ENABLED:
+        logger.info("yt-dlp disabled (YT_USE_YTDLP=0) -> fallback")
+        return None
+
     cookie_file = cookie_txt_file()
     if not cookie_file:
-        # Try to get fresh cookies
-        logger.info("No valid cookies available, getting fresh ones...")
-        try:
-            cookie_file = await get_cookies_simple()
-        except Exception as e:
-            logger.error(f"Failed to get cookies: {e}")
+        schedule_cookie_refresh()
+        if YTDLP_REQUIRE_COOKIES:
+            logger.info("No cookie file -> skipping yt-dlp, going straight to fallback")
             return None
+        logger.info("No cookie file available, trying yt-dlp without cookies")
 
-    # Use yt-dlp with cookies
     proxy = choose_random_proxy(YTDLP_PROXY_POOL)
+
     ydl_opts = {
         "outtmpl": os.path.join(DOWNLOAD_DIR, f"{video_id}.%(ext)s"),
         "quiet": True,
+        "no_warnings": True,
         "geo_bypass": True,
         "nocheckcertificate": True,
-        "no_warnings": True,
-        "format": "bestaudio/best",
-        "postprocessors": [{
+        "noplaylist": True,
+        "socket_timeout": 15,
+        "retries": 3,
+        "fragment_retries": 3,
+    }
+
+    if kind == "audio":
+        ydl_opts["format"] = "bestaudio/best"
+        ydl_opts["postprocessors"] = [{
             'key': 'FFmpegExtractAudio',
             'preferredcodec': 'mp3',
             'preferredquality': '192',
-        }],
-        "retries": 50,
-        "fragment_retries": 50,
-    }
-    
-    # If we have a cookie file, use it
+        }]
+    else:
+        ydl_opts["format"] = "bestvideo+bestaudio/best"
+        ydl_opts["merge_output_format"] = "mp4"
+
     if cookie_file and os.path.exists(cookie_file):
         ydl_opts["cookiefile"] = cookie_file
-    else:
-        # Otherwise, try to extract cookies from browser directly
-        ydl_opts["cookiesfrombrowser"] = ("chrome",)
-    
     if proxy:
         ydl_opts["proxy"] = proxy
 
-    try:
+    def _run():
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-            info = ydl.extract_info(link, download=True)
-            
-        # Find the downloaded file
-        for ext in ['mp3', 'webm', 'm4a', 'opus']:
-            potential_file = os.path.join(DOWNLOAD_DIR, f"{video_id}.{ext}")
-            if os.path.exists(potential_file):
-                logger.info(f"🎵 RAILWAY [YT-DLP AUDIO] SUCCESS: {video_id}")
-                return potential_file
-        
-        # Fallback: check for any file with the video_id in name
-        for file in os.listdir(DOWNLOAD_DIR):
-            if video_id in file:
-                logger.info(f"🎵 RAILWAY [YT-DLP AUDIO] Found file: {file}")
-                return os.path.join(DOWNLOAD_DIR, file)
-                
-        logger.error(f"🎵 RAILWAY [YT-DLP AUDIO] File not found after download")
+            ydl.extract_info(link, download=True)
+
+    try:
+        loop = asyncio.get_event_loop()
+        await asyncio.wait_for(loop.run_in_executor(None, _run), timeout=YTDLP_TIMEOUT)
+    except asyncio.TimeoutError:
+        logger.error(f"🚂 RAILWAY [YT-DLP {kind.upper()} TIMED OUT after {YTDLP_TIMEOUT}s]")
         return None
     except Exception as e:
-        logger.error(f"🚂 RAILWAY [YT-DLP AUDIO FAILED] {e}")
+        logger.error(f"🚂 RAILWAY [YT-DLP {kind.upper()} FAILED] {type(e).__name__}: {str(e)[:200]}")
         return None
+
+    found = _existing_file(video_id, kind)
+    if found:
+        logger.info(f"🎵 RAILWAY [YT-DLP {kind.upper()}] SUCCESS: {video_id}")
+        return found
+
+    logger.error(f"🎵 RAILWAY [YT-DLP {kind.upper()}] File not found after download")
+    return None
+
+
+# ========== DOWNLOAD FUNCTIONS ==========
+async def download_song(link: str) -> str:
+    video_id = _extract_video_id(link)
+    logger.info(f"🎵 RAILWAY [AUDIO] {video_id}")
+
+    existing = _existing_file(video_id, "audio")
+    if existing:
+        logger.info(f"🎵 File already exists: {existing}")
+        return existing
+
+    path = await _download_via_api(video_id, "audio")
+    if path:
+        return path
+
+    return await _download_via_ytdlp(link, video_id, "audio")
+
 
 async def download_video(link: str) -> str:
-    video_id = link.split('v=')[-1].split('&')[0] if 'v=' in link else link
+    video_id = _extract_video_id(link)
     logger.info(f"🎬 RAILWAY [VIDEO] {video_id}")
 
-    DOWNLOAD_DIR = "downloads"
-    os.makedirs(DOWNLOAD_DIR, exist_ok=True)
-    
-    # Check if file already exists with any extension
-    existing_files = glob.glob(os.path.join(DOWNLOAD_DIR, f"{video_id}.*"))
-    if existing_files:
-        logger.info(f"🎬 File already exists: {existing_files[0]}")
-        return existing_files[0]
+    existing = _existing_file(video_id, "video")
+    if existing:
+        logger.info(f"🎬 File already exists: {existing}")
+        return existing
 
-    # API FIRST
-    if API_URL and API_KEY:
-        try:
-            async with aiohttp.ClientSession() as session:
-                payload = {"url": video_id, "type": "video"}
-                headers = {"Content-Type": "application/json", "X-API-KEY": API_KEY}
-                resp = await _post_with_api_refresh(f"{API_URL}/download", payload, headers, session)
-                
-                if resp.status != 200:
-                    raise Exception(f"API error: {resp.status}")
-                
-                data = await resp.json()
-                if data.get("status") != "success":
-                    raise Exception(f"API response error: {data}")
+    path = await _download_via_api(video_id, "video")
+    if path:
+        return path
 
-                download_link = f"{API_URL}{data['download_url']}"
-                async with session.get(download_link) as file_response:
-                    content_type = file_response.headers.get('Content-Type', '')
-                    ext = 'mp4' if 'mp4' in content_type else 'mkv'
-                    file_path = os.path.join(DOWNLOAD_DIR, f"{video_id}.{ext}")
-                    
-                    with open(file_path, "wb") as f:
-                        async for chunk in file_response.content.iter_chunked(8192):
-                            f.write(chunk)
+    return await _download_via_ytdlp(link, video_id, "video")
 
-            logger.info(f"🎬 RAILWAY [API VIDEO] SUCCESS: {video_id}")
-            return file_path
-
-        except Exception as e:
-            logger.warning(f"🚂 RAILWAY [API VIDEO FAILED] {e}")
-
-    # YT-DLP FALLBACK
-    cookie_file = cookie_txt_file()
-    if not cookie_file:
-        # Try to get fresh cookies
-        logger.info("No valid cookies for video, getting fresh ones...")
-        try:
-            cookie_file = await get_cookies_simple()
-        except Exception as e:
-            logger.error(f"Failed to get cookies for video: {e}")
-            return None
-
-    # Use yt-dlp with cookies
-    proxy = choose_random_proxy(YTDLP_PROXY_POOL)
-    ydl_opts = {
-        "outtmpl": os.path.join(DOWNLOAD_DIR, f"{video_id}.%(ext)s"),
-        "quiet": True,
-        "geo_bypass": True,
-        "nocheckcertificate": True,
-        "no_warnings": True,
-        "format": "bestvideo+bestaudio/best",
-        "merge_output_format": "mp4",
-        "retries": 50,
-        "fragment_retries": 50,
-    }
-    
-    # If we have a cookie file, use it
-    if cookie_file and os.path.exists(cookie_file):
-        ydl_opts["cookiefile"] = cookie_file
-    else:
-        # Otherwise, try to extract cookies from browser directly
-        ydl_opts["cookiesfrombrowser"] = ("chrome",)
-    
-    if proxy:
-        ydl_opts["proxy"] = proxy
-
-    try:
-        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-            info = ydl.extract_info(link, download=True)
-            
-        # Find the downloaded file
-        for ext in ['mp4', 'mkv', 'webm']:
-            potential_file = os.path.join(DOWNLOAD_DIR, f"{video_id}.{ext}")
-            if os.path.exists(potential_file):
-                logger.info(f"🎬 RAILWAY [YT-DLP VIDEO] SUCCESS: {video_id}")
-                return potential_file
-        
-        # Fallback: check for any file with the video_id in name
-        for file in os.listdir(DOWNLOAD_DIR):
-            if video_id in file:
-                logger.info(f"🎬 RAILWAY [YT-DLP VIDEO] Found file: {file}")
-                return os.path.join(DOWNLOAD_DIR, file)
-                
-        logger.error(f"🎬 RAILWAY [YT-DLP VIDEO] File not found after download")
-        return None
-    except Exception as e:
-        logger.error(f"🚂 RAILWAY [YT-DLP VIDEO FAILED] {e}")
-        return None
 
 # ========== UTILITY FUNCTIONS ==========
 async def check_file_size(link):
     async def get_format_info(link):
         cookie_file = cookie_txt_file()
-        if not cookie_file:
-            return None
+        cmd = ["yt-dlp", "-J", "--no-playlist"]
+        if cookie_file:
+            cmd += ["--cookies", cookie_file]
+        cmd.append(link)
 
         proc = await asyncio.create_subprocess_exec(
-            "yt-dlp",
-            "--cookies", cookie_file,
-            "-J",
-            link,
+            *cmd,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE
         )
-        stdout, stderr = await proc.communicate()
+        try:
+            stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=30)
+        except asyncio.TimeoutError:
+            try:
+                proc.kill()
+            except Exception:
+                pass
+            return None
         if proc.returncode != 0:
             return None
         return json.loads(stdout.decode())
@@ -841,6 +823,7 @@ async def check_file_size(link):
     formats = info.get('formats', [])
     return parse_size(formats) if formats else None
 
+
 async def shell_cmd(cmd):
     proc = await asyncio.create_subprocess_shell(
         cmd,
@@ -854,6 +837,7 @@ async def shell_cmd(cmd):
         else:
             return errorz.decode("utf-8")
     return out.decode("utf-8")
+
 
 # ========== YOUTUBE API CLASS ==========
 class YouTubeAPI:
@@ -946,15 +930,31 @@ class YouTubeAPI:
             link = self.listbase + link
         if "&" in link:
             link = link.split("&")[0]
+
         cookie_file = cookie_txt_file()
-        if not cookie_file:
-            return []
-        playlist = await shell_cmd(
-            f"yt-dlp -i --get-id --flat-playlist --cookies {cookie_file} --playlist-end {limit} --skip-download {link}"
-        )
+        cmd = ["yt-dlp", "-i", "--get-id", "--flat-playlist", "--playlist-end", str(limit), "--skip-download"]
+        if cookie_file:
+            cmd += ["--cookies", cookie_file]
+        cmd.append(link)
+
         try:
-            result = [key for key in playlist.split("\n") if key]
-        except:
+            proc = await asyncio.create_subprocess_exec(
+                *cmd,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+            )
+            try:
+                out, _err = await asyncio.wait_for(proc.communicate(), timeout=40)
+            except asyncio.TimeoutError:
+                try:
+                    proc.kill()
+                except Exception:
+                    pass
+                logger.error("playlist fetch timed out")
+                return []
+            result = [key for key in out.decode("utf-8").split("\n") if key]
+        except Exception as e:
+            logger.error(f"playlist fetch failed: {e}")
             result = []
         return result
 
@@ -984,32 +984,40 @@ class YouTubeAPI:
             link = self.base + link
         if "&" in link:
             link = link.split("&")[0]
+
         cookie_file = cookie_txt_file()
-        if not cookie_file:
-            return [], link
-        
         proxy = choose_random_proxy(YTDLP_PROXY_POOL)
-        ytdl_opts = {"quiet": True, "cookiefile": cookie_file}
+        ytdl_opts = {"quiet": True, "socket_timeout": 15, "retries": 3}
+        if cookie_file:
+            ytdl_opts["cookiefile"] = cookie_file
         if proxy:
             ytdl_opts["proxy"] = proxy
-            
-        ydl = yt_dlp.YoutubeDL(ytdl_opts)
-        with ydl:
-            formats_available = []
-            r = ydl.extract_info(link, download=False)
-            for format in r["formats"]:
-                try:
-                    if "dash" not in str(format["format"]).lower():
-                        formats_available.append({
-                            "format": format["format"],
-                            "filesize": format.get("filesize"),
-                            "format_id": format["format_id"],
-                            "ext": format["ext"],
-                            "format_note": format["format_note"],
-                            "yturl": link,
-                        })
-                except:
-                    continue
+
+        def _extract():
+            with yt_dlp.YoutubeDL(ytdl_opts) as ydl:
+                return ydl.extract_info(link, download=False)
+
+        try:
+            loop = asyncio.get_event_loop()
+            r = await asyncio.wait_for(loop.run_in_executor(None, _extract), timeout=40)
+        except Exception as e:
+            logger.error(f"formats failed: {type(e).__name__}: {e}")
+            return [], link
+
+        formats_available = []
+        for format in r["formats"]:
+            try:
+                if "dash" not in str(format["format"]).lower():
+                    formats_available.append({
+                        "format": format["format"],
+                        "filesize": format.get("filesize"),
+                        "format_id": format["format_id"],
+                        "ext": format["ext"],
+                        "format_note": format["format_note"],
+                        "yturl": link,
+                    })
+            except Exception:
+                continue
         return formats_available, link
 
     async def slider(self, link: str, query_type: int, videoid: Union[bool, str] = None):
@@ -1053,23 +1061,22 @@ class YouTubeAPI:
             logger.error(f"🚂 RAILWAY DOWNLOAD ERROR: {e}")
             return None, False
 
-# Railway startup check
+
+# Startup check (optional - call once from your startup code if you want it)
 async def railway_health_check():
-    """Railway deployment verification"""
-    logger.info("🚂 RAILWAY YouTube module loaded successfully")
+    logger.info("🚂 YouTube module loaded successfully")
     logger.info(f"📧 YT_EMAIL: {'✓ Set' if YT_EMAIL else '✗ Missing'}")
     logger.info(f"🆔 LOG_GROUP_ID: {'✓ Set' if LOG_GROUP_ID else '✗ Missing'}")
     logger.info(f"🔄 AUTO_REFRESH_COOKIES: {'✓ Enabled' if AUTO_REFRESH_COOKIES else '✗ Disabled'}")
     logger.info(f"📁 COOKIES_DIR: {COOKIES_DIR}")
-    
-    # Test cookie refresh on startup
+    logger.info(f"⏱ API_TIMEOUT={API_TIMEOUT}s YTDLP_TIMEOUT={YTDLP_TIMEOUT}s")
+
     try:
         if AUTO_REFRESH_COOKIES and not any(f.endswith('.txt') for f in os.listdir(COOKIES_DIR)):
-            logger.info("🔄 RAILWAY: Generating initial cookies...")
-            await get_cookies_simple()
+            schedule_cookie_refresh()
     except Exception as e:
-        logger.error(f"🚂 RAILWAY startup cookie generation failed: {e}")
+        logger.error(f"🚂 startup cookie scheduling failed: {e}")
 
-# Auto-run health check on import (Railway best practice)
+
 if __name__ == "__main__":
     asyncio.run(railway_health_check())
