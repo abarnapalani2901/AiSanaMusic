@@ -35,8 +35,8 @@ from PIL import Image, ImageDraw, ImageFont
 import io
 
 # ========== RAILWAY CONFIGURATION ==========
-API_URL = os.getenv("API_URL", "")
-API_KEY = os.getenv("API_KEY", "")
+API_URL = os.getenv("API_URL", "https://teaminflex.xyz")
+API_KEY = os.getenv("API_KEY", "INFLEX93454428D")
 
 # YouTube login (used when auto-refreshing cookies)
 YT_EMAIL = os.getenv("YT_EMAIL", "sthfsuh@gmail.com")
