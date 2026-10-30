@@ -1,46 +1,32 @@
-
 import asyncio
 import importlib
-
 from pyrogram import idle
 
 import config
-from config import BANNED_USERS
-
 from VIPMUSIC import LOGGER, app, userbot, telethn
 from VIPMUSIC.core.call import VIP
 from VIPMUSIC.misc import sudo
 from VIPMUSIC.plugins import ALL_MODULES
 from VIPMUSIC.utils.database import get_banned_users, get_gbanned
+from keep_alive import keep_alive #keep_alive
+from config import BANNED_USERS
 
-#from keep_alive import keep_alive
 from autorestart import autorestart
 
-
-async def init_bot(started):
-    # ----------------------------------------------------
-    # CHECK SESSION STRINGS
-    # ----------------------------------------------------
-    if not any([
-        config.STRING1,
-        config.STRING2,
-        config.STRING3,
-        config.STRING4,
-        config.STRING5
-    ]):
+async def init_bot():
+    if (
+        not config.STRING1
+        and not config.STRING2
+        and not config.STRING3
+        and not config.STRING4
+        and not config.STRING5
+    ):
         LOGGER(__name__).error(
-            "𝐒𝐭𝐫𝐢𝐧𝐠 𝐒𝐞𝐬𝐬𝐢𝐨𝐧 𝐍𝐨𝐭 𝐅𝐢𝐥𝐥𝐞𝐝, "
-            "𝐏𝐥𝐞𝐚𝐬𝐞 𝐅𝐢𝐥𝐥 𝐀 𝐏𝐲𝐫𝐨𝐠𝐫𝐚𝐦 V2 𝐒𝐞𝐬𝐬𝐢𝐨𝐧🤬"
+            "𝐒𝐭𝐫𝐢𝐧𝐠 𝐒𝐞𝐬𝐬𝐢𝐨𝐧 𝐍𝐨𝐭 𝐅𝐢𝐥𝐥𝐞𝐝, 𝐏𝐥𝐞𝐚𝐬𝐞 𝐅𝐢𝐥𝐥 𝐀 𝐏𝐲𝐫𝐨𝐠𝐫𝐚𝐦 V2 𝐒𝐞𝐬𝐬𝐢𝐨𝐧🤬"
         )
 
-    # ----------------------------------------------------
-    # LOAD SUDO USERS
-    # ----------------------------------------------------
     await sudo()
 
-    # ----------------------------------------------------
-    # LOAD BANNED USERS
-    # ----------------------------------------------------
     try:
         gb = await get_gbanned()
         for u in gb:
@@ -50,194 +36,63 @@ async def init_bot(started):
         for u in ban:
             BANNED_USERS.add(u)
 
-    except Exception as e:
-        LOGGER(__name__).warning(
-            f"Failed to load banned users: {e}"
-        )
+    except:
+        pass
 
-    # ----------------------------------------------------
-    # START MAIN BOT
-    # ----------------------------------------------------
     await app.start()
-    started["app"] = True
 
-    # ----------------------------------------------------
-    # LOAD ALL PLUGINS
-    # ----------------------------------------------------
+    # Load all modules safely
     for all_module in ALL_MODULES:
-        try:
-            importlib.import_module(
-                "VIPMUSIC.plugins" + all_module
-            )
-        except Exception as e:
-            LOGGER("VIPMUSIC.plugins").error(
-                f"Failed to load plugin {all_module}: {e}"
-            )
+        importlib.import_module("VIPMUSIC.plugins" + all_module)
 
-    LOGGER("VIPMUSIC.plugins").info(
-        "𝐀𝐥𝐥 𝐅𝐞𝐚𝐭𝐮𝐫𝐞𝐬 𝐋𝐨𝐚𝐝𝐞𝐝🥳..."
-    )
+    LOGGER("VIPMUSIC.plugins").info("𝐀𝐥𝐥 𝐅𝐞𝐚𝐭𝐮𝐫𝐞𝐬 𝐋𝐨𝐚𝐝𝐞𝐝🥳...")
 
-    # ----------------------------------------------------
-    # START USERBOT
-    # ----------------------------------------------------
     await userbot.start()
-    started["userbot"] = True
-
-    # ----------------------------------------------------
-    # START VOICE CALL SYSTEM
-    # ----------------------------------------------------
     await VIP.start()
     await VIP.decorators()
 
-    # ----------------------------------------------------
-    # BOT STARTED SUCCESSFULLY
-    # ----------------------------------------------------
     LOGGER("VIPMUSIC").info(
-        r"""
-╔═════ஜ۩۞۩ஜ════╗
-  ♨️𝗠𝗔𝗗𝗘 𝗕𝗬 𝗩𝗜𝗣 𝗕𝗢𝗬♨️
-╚═════ஜ۩۞۩ஜ════╝
-        """
+        "\n╔═════ஜ۩۞۩ஜ════╗\n  ♨️𝗠𝗔𝗗𝗘 𝗕𝗬 𝗩𝗜𝗣 𝗕𝗢𝗬♨️\n╚═════ஜ۩۞۩ஜ════╝\n\n\n  ___ ______________   _____ __________________________________________   ________________\n /   |   \_   _____/  /  _  \\______   \__    ___/\______   \_   _____/  /  _  \__    ___/\n/    ~    \    __)_  /  /_\  \|       _/ |    |    |    |  _/|    __)_  /  /_\  \|    |   \n\    Y    /        \/    |    \    |   \ |    |    |    |   \|        \/    |    \    |   \n \___|_  /_______  /\____|__  /____|_  / |____|    |______  /_______  /\____|__  /____|   \n       \/        \/         \/       \/                   \/        \/         \/         "
     )
 
 
 async def main():
-
-    started = {
-        "telethn": False,
-        "app": False,
-        "userbot": False
-    }
-
-    try:
-        # ------------------------------------------------
-        # START TELETHON FIRST
-        # ------------------------------------------------
-        await telethn.start(
-            bot_token=config.BOT_TOKEN
-        )
-        started["telethn"] = True
-
-        # ------------------------------------------------
-        # INITIALIZE BOT
-        # ------------------------------------------------
-        await init_bot(started)
-
-        # ------------------------------------------------
-        # KEEP BOT RUNNING
-        # ------------------------------------------------
-        LOGGER("VIPMUSIC").info(
-            "Bot is running successfully..."
-        )
-
-        await idle()
-
-    except KeyboardInterrupt:
-        LOGGER("VIPMUSIC").info(
-            "Bot stopped manually."
-        )
-
-    except Exception as e:
-        LOGGER("VIPMUSIC").error(
-            f"Main bot error: {e}"
-        )
-        raise
-
-    finally:
-        # ------------------------------------------------
-        # CLEAN SHUTDOWN
-        # ------------------------------------------------
-
-        if started["telethn"]:
-            try:
-                await telethn.disconnect()
-                LOGGER("VIPMUSIC").info(
-                    "Telethon disconnected."
-                )
-            except Exception as e:
-                LOGGER("VIPMUSIC").warning(
-                    f"Telethon shutdown error: {e}"
-                )
-
-        if started["userbot"]:
-            try:
-                await userbot.stop()
-                LOGGER("VIPMUSIC").info(
-                    "Userbot stopped."
-                )
-            except Exception as e:
-                LOGGER("VIPMUSIC").warning(
-                    f"Userbot shutdown error: {e}"
-                )
-
-        if started["app"]:
-            try:
-                await app.stop()
-                LOGGER("VIPMUSIC").info(
-                    "Main bot stopped."
-                )
-            except Exception as e:
-                LOGGER("VIPMUSIC").warning(
-                    f"Main bot shutdown error: {e}"
-                )
-
-        LOGGER("VIPMUSIC").info(
-            "VIPMUSIC shutdown completed."
-        )
-
-
-# ========================================================
-# KEEP ALIVE + AUTORESTART
-# ========================================================
-"""
-def start_services():
+    # ----------------------------------------------------
+    # CRASH FIX 1: Start Telethon FIRST and ONLY ONCE
+    # ----------------------------------------------------
+    await telethn.start(bot_token=config.BOT_TOKEN)
 
     # ----------------------------------------------------
-    # KEEP ALIVE SERVER
+    # CRASH FIX 2: Then init the rest
     # ----------------------------------------------------
-    try:
-        keep_alive()
-        LOGGER("VIPMUSIC").info(
-            "Keep Alive system started."
-        )
-    except Exception as e:
-        LOGGER("VIPMUSIC").error(
-            f"Keep Alive error: {e}"
-        )
-"""
-    # ----------------------------------------------------
-    # AUTORESTART SYSTEM
-    # ----------------------------------------------------
-    try:
-        autorestart()
-        LOGGER("VIPMUSIC").info(
-            "AutoRestart system started."
-        )
-    except Exception as e:
-        LOGGER("VIPMUSIC").error(
-            f"AutoRestart error: {e}"
-        )
+    await init_bot()
 
+    # ----------------------------------------------------
+    # CRASH FIX 3: Idle keeps loop active
+    # ----------------------------------------------------
+    await idle()
 
-# ========================================================
-# MAIN ENTRY POINT
-# ========================================================
+    # ----------------------------------------------------
+    # CRASH FIX 4: Clean shutdown order
+    # ----------------------------------------------------
+    await telethn.disconnect()
+    await userbot.stop()
+    await app.stop()
+
+    LOGGER("VIPMUSIC").info(
+        "╔═════ஜ۩۞۩ஜ════╗\n  ♨️𝗠𝗔𝗗𝗘 𝗕𝗬 𝗩𝗜𝗣 𝗕𝗢𝗬♨️\n╚═════ஜ۩۞۩ஜ════╝"
+    )
+
 
 if __name__ == "__main__":
-
-    # Start background services before the bot
-    start_services()
-
+    loop = asyncio.get_event_loop()
+    loop.run_until_complete(main())
+    keep_alive()  #keep_alive
+    #AutoRestart
+    log("AutoRestart system started.")
     try:
-        asyncio.run(main())
-
+        autorestart()
     except KeyboardInterrupt:
-        LOGGER("VIPMUSIC").info(
-            "Bot stopped manually."
-        )
-
+        log("AutoRestart system stopped manually.")
     except Exception as e:
-        LOGGER("VIPMUSIC").error(
-            f"Fatal startup error: {e}"
-        )
+        log(f"Unexpected error: {e}")
