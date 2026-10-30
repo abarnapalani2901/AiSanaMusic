@@ -13,6 +13,7 @@ Self-hosting is the most reliable option:
     https://github.com/sumitkolhe/jiosaavn-api
 """
 
+import asyncio
 import html
 import os
 import re
@@ -61,8 +62,10 @@ class JioSaavnAPI:
                         data = await r.json(content_type=None)
                         if data and data.get("success", True):
                             return data
-            except Exception:
+            except Exception as e:
+                print(f"[JioSaavn] API {base} failed: {type(e).__name__}: {e}")
                 continue  # try next API instance
+        print("[JioSaavn] all API instances failed")
         return None
 
     @staticmethod
@@ -87,6 +90,7 @@ class JioSaavnAPI:
         results = ((data or {}).get("data") or {}).get("results") or []
         results = [s for s in results if self._best_url(s)]
         if not results:
+            print(f"[JioSaavn] no results for query: {q!r}")
             return None
 
         want = _tokens(q)
@@ -128,7 +132,8 @@ class JioSaavnAPI:
                             f.write(chunk)
             os.replace(tmp, path)
             return path
-        except Exception:
+        except Exception as e:
+            print(f"[JioSaavn] file download failed: {type(e).__name__}: {e}")
             if os.path.exists(tmp):
                 os.remove(tmp)
             return None
@@ -137,20 +142,27 @@ class JioSaavnAPI:
 JioSaavn = JioSaavnAPI()
 
 
+YT_TIMEOUT = int(os.getenv("YT_DOWNLOAD_TIMEOUT", "30"))  # seconds
+
+
 async def download_with_fallback(youtube, vidid, mystic, title=None, video=None):
     """
     Drop-in replacement for:
         file_path, direct = await YouTube.download(vidid, mystic, videoid=True, video=video)
-    Tries YouTube first; if it raises (bot-check / cookies) or returns nothing,
-    falls back to JioSaavn using `title`. Audio only.
-    Returns (file_path, direct) like YouTube.download does.
+    Tries YouTube first (with a timeout, so a hang also triggers the fallback);
+    on error / timeout / empty result, falls back to JioSaavn using `title`.
+    Audio only. Returns (file_path, direct) like YouTube.download does.
     """
     try:
-        file_path, direct = await youtube.download(
-            vidid, mystic, videoid=True, video=video
+        file_path, direct = await asyncio.wait_for(
+            youtube.download(vidid, mystic, videoid=True, video=video),
+            timeout=YT_TIMEOUT,
         )
         if file_path:
             return file_path, direct
+        print("[YouTube] returned no file")
+    except asyncio.TimeoutError:
+        print(f"[YouTube] timed out after {YT_TIMEOUT}s -> trying JioSaavn")
     except Exception as e:
         print(f"[YouTube failed -> trying JioSaavn] {type(e).__name__}: {e}")
 
@@ -159,7 +171,9 @@ async def download_with_fallback(youtube, vidid, mystic, title=None, video=None)
     if not title:
         raise Exception("No title available for JioSaavn search")
 
+    print(f"[JioSaavn] searching for: {title!r}")
     path = await JioSaavn.download(title)
     if not path:
         raise Exception("YouTube and JioSaavn both failed")
+    print(f"[JioSaavn] playing from: {path}")
     return path, True
