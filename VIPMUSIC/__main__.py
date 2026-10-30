@@ -8,10 +8,10 @@ from VIPMUSIC.core.call import VIP
 from VIPMUSIC.misc import sudo
 from VIPMUSIC.plugins import ALL_MODULES
 from VIPMUSIC.utils.database import get_banned_users, get_gbanned
-from keep_alive import keep_alive #keep_alive
 from config import BANNED_USERS
 
 from autorestart import autorestart
+from keep_alive import keep_alive  # <-- ADDED: keep alive import
 
 async def init_bot():
     if (
@@ -85,9 +85,9 @@ async def main():
 
 
 if __name__ == "__main__":
+    keep_alive()  # <-- ADDED: starts the Flask web server in a background thread
     loop = asyncio.get_event_loop()
     loop.run_until_complete(main())
-    keep_alive()  #keep_alive
     #AutoRestart
     log("AutoRestart system started.")
     try:
