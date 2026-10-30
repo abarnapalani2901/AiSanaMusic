@@ -6,6 +6,7 @@ from pyrogram.types import InlineKeyboardMarkup
 
 import config
 from VIPMUSIC import Carbon, YouTube, app
+from VIPMUSIC.platforms.JioSaavn import download_with_fallback
 from VIPMUSIC.core.call import VIP
 from VIPMUSIC.misc import db
 from VIPMUSIC.utils.database import add_active_video_chat, is_active_chat
@@ -83,8 +84,8 @@ async def stream(
                 status = True if video else None
 
                 try:
-                    file_path, direct = await YouTube.download(
-                        vidid, mystic, video=status, videoid=True
+                    file_path, direct = await download_with_fallback(
+                        YouTube, vidid, mystic, title=title, video=status
                     )
                 except:
                     raise AssistantErr(_["play_14"])
@@ -161,8 +162,8 @@ async def stream(
         status = True if video else None
 
         try:
-            file_path, direct = await YouTube.download(
-                vidid, mystic, videoid=True, video=status
+            file_path, direct = await download_with_fallback(
+                YouTube, vidid, mystic, title=title, video=status
             )
         except:
             raise AssistantErr(_["play_14"])
@@ -508,4 +509,3 @@ async def stream(
             db[chat_id][0]["mystic"] = run
             db[chat_id][0]["markup"] = "tg"
             await mystic.delete()
-
