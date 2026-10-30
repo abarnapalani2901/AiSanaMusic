@@ -76,5 +76,5 @@ regex
 coloredlogs
 aiosqlite
 SQLAlchemy
-pycryptodome   #jiosaavn
+# pycryptodome   #jiosaavn
 werkzeug==2.0.3
