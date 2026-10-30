@@ -4,6 +4,8 @@ tgcrypto
 py-tgcalls==0.9.7
 telethon==1.33.1
 pykeyboard
+pyrofork
+kurigram
 
 # --- Web / networking ---
 aiofiles
