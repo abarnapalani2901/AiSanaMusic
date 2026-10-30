@@ -28,7 +28,7 @@ pytz
 future==0.18.3        # CUTE, SHUKLA 1.0.0, 
 search_engine_parser
 pyrogram==2.0.106
-pyrofork # start react animation
+# pyrofork # start react animation
 py-tgcalls==0.9.7
 pykeyboard
 pyshorteners
@@ -65,7 +65,7 @@ cloudscraper
 flask==2.2.2   #keep_alive         # CUTE
 pymongo
 #pymongo[srv]==3.12.3
-kurigram
+# kurigram
 git+https://github.com/AsmSafone/SafoneAPI
 SafoneAPI
 async_pymongo #fed
