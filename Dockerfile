@@ -69,6 +69,10 @@ RUN apt-get update \
     && python -m pip install -U bgutil-ytdlp-pot-provider \
     # Fail the build immediately if the core libs are not importable
     && python -c "import pyrogram, pytgcalls; print('pyrogram', pyrogram.__version__, 'OK')" \
+    # Patch pyrogram 2.0.106 so new 64-bit channel IDs (e.g. -1002275616383) are accepted
+    && sed -i 's/MIN_CHANNEL_ID = -1002147483647/MIN_CHANNEL_ID = -1007852516352/' /usr/local/lib/python3.10/site-packages/pyrogram/utils.py \
+    && sed -i 's/MIN_CHAT_ID = -2147483647/MIN_CHAT_ID = -999999999999/' /usr/local/lib/python3.10/site-packages/pyrogram/utils.py \
+    && grep -n "MIN_CHANNEL_ID =\|MIN_CHAT_ID =" /usr/local/lib/python3.10/site-packages/pyrogram/utils.py \
     # Safe cleanup only (bytecode caches)
     && find /usr/local/lib/python3.10 -type d -name "__pycache__" -exec rm -rf {} + 2>/dev/null || true \
     && apt-get purge -y --auto-remove gcc g++ make libffi-dev libssl-dev \
