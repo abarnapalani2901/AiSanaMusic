@@ -17,7 +17,7 @@ from keep_alive import keep_alive  # starts Flask server + self-ping
 # Big banner shown after startup (raw string, so the backslashes are safe)
 START_BANNER = r"""
 ╔═════ஜ۩۞۩ஜ════╗
-  ♨️𝗠𝗔𝗗𝗘 𝗕𝗬 𝗩𝗜𝗣 𝗕𝗢𝗬♨️
+  ♨️ 𝗠𝗔𝗗𝗘 𝗕𝗬 ♨️
 ╚═════ஜ۩۞۩ஜ════╝
 
 
