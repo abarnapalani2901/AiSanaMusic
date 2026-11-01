@@ -1,5 +1,7 @@
 import asyncio
 import importlib
+import sys
+
 from pyrogram import idle
 
 import config
@@ -10,8 +12,14 @@ from VIPMUSIC.plugins import ALL_MODULES
 from VIPMUSIC.utils.database import get_banned_users, get_gbanned
 from config import BANNED_USERS
 
-from autorestart import autorestart
-from keep_alive import keep_alive  # <-- ADDED: keep alive import
+from keep_alive import keep_alive
+
+BANNER = r"""
+╔═════ஜ۩۞۩ஜ════╗
+  ♨️𝗠𝗔𝗗𝗘 𝗕𝗬 𝗩𝗜𝗣 𝗕𝗢𝗬♨️
+╚═════ஜ۩۞۩ஜ════╝
+"""
+
 
 async def init_bot():
     if (
@@ -35,13 +43,11 @@ async def init_bot():
         ban = await get_banned_users()
         for u in ban:
             BANNED_USERS.add(u)
-
-    except:
+    except Exception:
         pass
 
     await app.start()
 
-    # Load all modules safely
     for all_module in ALL_MODULES:
         importlib.import_module("VIPMUSIC.plugins" + all_module)
 
@@ -51,48 +57,31 @@ async def init_bot():
     await VIP.start()
     await VIP.decorators()
 
-    LOGGER("VIPMUSIC").info(
-        "\n╔═════ஜ۩۞۩ஜ════╗\n  ♨️𝗠𝗔𝗗𝗘 𝗕𝗬 𝗩𝗜𝗣 𝗕𝗢𝗬♨️\n╚═════ஜ۩۞۩ஜ════╝\n\n\n  ___ ______________   _____ __________________________________________   ________________\n /   |   \_   _____/  /  _  \\______   \__    ___/\______   \_   _____/  /  _  \__    ___/\n/    ~    \    __)_  /  /_\  \|       _/ |    |    |    |  _/|    __)_  /  /_\  \|    |   \n\    Y    /        \/    |    \    |   \ |    |    |    |   \|        \/    |    \    |   \n \___|_  /_______  /\____|__  /____|_  / |____|    |______  /_______  /\____|__  /____|   \n       \/        \/         \/       \/                   \/        \/         \/         "
-    )
+    LOGGER("VIPMUSIC").info(BANNER)
 
 
 async def main():
-    # ----------------------------------------------------
-    # CRASH FIX 1: Start Telethon FIRST and ONLY ONCE
-    # ----------------------------------------------------
     await telethn.start(bot_token=config.BOT_TOKEN)
-
-    # ----------------------------------------------------
-    # CRASH FIX 2: Then init the rest
-    # ----------------------------------------------------
     await init_bot()
-
-    # ----------------------------------------------------
-    # CRASH FIX 3: Idle keeps loop active
-    # ----------------------------------------------------
     await idle()
 
-    # ----------------------------------------------------
-    # CRASH FIX 4: Clean shutdown order
-    # ----------------------------------------------------
+    # Clean shutdown
     await telethn.disconnect()
     await userbot.stop()
     await app.stop()
 
-    LOGGER("VIPMUSIC").info(
-        "╔═════ஜ۩۞۩ஜ════╗\n  ♨️𝗠𝗔𝗗𝗘 𝗕𝗬 𝗩𝗜𝗣 𝗕𝗢𝗬♨️\n╚═════ஜ۩۞۩ஜ════╝"
-    )
+    LOGGER("VIPMUSIC").info(BANNER)
 
 
 if __name__ == "__main__":
-    keep_alive()  # <-- ADDED: starts the Flask web server in a background thread
+    keep_alive()  # Flask server + self-ping run in background daemon threads
+
     loop = asyncio.get_event_loop()
-    loop.run_until_complete(main())
-    #AutoRestart
-    log("AutoRestart system started.")
     try:
-        autorestart()
+        loop.run_until_complete(main())
     except KeyboardInterrupt:
-        log("AutoRestart system stopped manually.")
+        LOGGER("VIPMUSIC").info("Stopped manually.")
     except Exception as e:
-        log(f"Unexpected error: {e}")
+        # Exit with an error code so Render restarts the service automatically
+        LOGGER("VIPMUSIC").exception(f"Fatal error, exiting for restart: {e}")
+        sys.exit(1)
