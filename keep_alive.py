@@ -30,7 +30,7 @@ def run():
 
 def self_ping(interval=240):
     """Ping our own public URL every 4 minutes (Render sets RENDER_EXTERNAL_URL)."""
-    url = os.environ.get("RENDER_EXTERNAL_URL") or os.environ.get("APP_URL")
+    url = os.environ.get("RENDER_EXTERNAL_URL", "https://aisanamusic.onrender.com") or os.environ.get("APP_URL") #change live url
     if not url:
         print("[keep_alive] RENDER_EXTERNAL_URL/APP_URL not set, self-ping disabled.")
         return
