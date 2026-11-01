@@ -12,13 +12,28 @@ from VIPMUSIC.plugins import ALL_MODULES
 from VIPMUSIC.utils.database import get_banned_users, get_gbanned
 from config import BANNED_USERS
 
-from keep_alive import keep_alive
+from keep_alive import keep_alive  # starts Flask server + self-ping
 
-BANNER = r"""
+# Big banner shown after startup (raw string, so the backslashes are safe)
+START_BANNER = r"""
 ╔═════ஜ۩۞۩ஜ════╗
   ♨️𝗠𝗔𝗗𝗘 𝗕𝗬 𝗩𝗜𝗣 𝗕𝗢𝗬♨️
 ╚═════ஜ۩۞۩ஜ════╝
-"""
+
+
+  ___ ______________   _____ __________________________________________   ________________
+ /   |   \_   _____/  /  _  \______   \__    ___/\______   \_   _____/  /  _  \__    ___/
+/    ~    \    __)_  /  /_\  \|       _/ |    |    |    |  _/|    __)_  /  /_\  \|    |   
+\    Y    /        \/    |    \    |   \ |    |    |    |   \|        \/    |    \    |   
+ \___|_  /_______  /\____|__  /____|_  / |____|    |______  /_______  /\____|__  /____|   
+       \/        \/         \/       \/                   \/        \/         \/         """
+
+# Short banner shown on shutdown
+STOP_BANNER = (
+    "╔═════ஜ۩۞۩ஜ════╗\n"
+    "  ♨️𝗠𝗔𝗗𝗘 𝗕𝗬 𝗩𝗜𝗣 𝗕𝗢𝗬♨️\n"
+    "╚═════ஜ۩۞۩ஜ════╝"
+)
 
 
 async def init_bot():
@@ -48,6 +63,7 @@ async def init_bot():
 
     await app.start()
 
+    # Load all modules safely
     for all_module in ALL_MODULES:
         importlib.import_module("VIPMUSIC.plugins" + all_module)
 
@@ -57,20 +73,25 @@ async def init_bot():
     await VIP.start()
     await VIP.decorators()
 
-    LOGGER("VIPMUSIC").info(BANNER)
+    LOGGER("VIPMUSIC").info(START_BANNER)
 
 
 async def main():
+    # Start Telethon first and only once
     await telethn.start(bot_token=config.BOT_TOKEN)
+
+    # Then init the rest
     await init_bot()
+
+    # Idle keeps the loop active
     await idle()
 
-    # Clean shutdown
+    # Clean shutdown order
     await telethn.disconnect()
     await userbot.stop()
     await app.stop()
 
-    LOGGER("VIPMUSIC").info(BANNER)
+    LOGGER("VIPMUSIC").info(STOP_BANNER)
 
 
 if __name__ == "__main__":
