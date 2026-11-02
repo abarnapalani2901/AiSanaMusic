@@ -57,7 +57,7 @@ def _env_float(name: str, default: float) -> float:
 
 API_URLS: List[str] = [
     u.strip().rstrip("/")
-    for u in os.getenv("SAAVN_API_URLS", "https://jiosaavn-api-peach-three.vercel.app/").split(",")
+    for u in os.getenv("SAAVN_API_URLS", "https://jiosaavn-ezee.vercel.app,https://jiosaavn-api-peach-three.vercel.app/").split(",")
     if u.strip()
 ]
 API_KEY: str = os.getenv("SAAVN_API_KEY", "").strip()
