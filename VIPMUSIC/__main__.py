@@ -12,7 +12,7 @@ from VIPMUSIC.plugins import ALL_MODULES
 from VIPMUSIC.utils.database import get_banned_users, get_gbanned
 from config import BANNED_USERS
 
-from keep_alive import keep_alive  # starts Flask server + self-ping
+# from keep_alive import keep_alive  # starts Flask server + self-ping
 
 # Big banner shown after startup (raw string, so the backslashes are safe)
 START_BANNER = r"""
@@ -95,7 +95,7 @@ async def main():
 
 
 if __name__ == "__main__":
-    keep_alive()  # Flask server + self-ping run in background daemon threads
+    #keep_alive()  # Flask server + self-ping run in background daemon threads
 
     loop = asyncio.get_event_loop()
     try:
