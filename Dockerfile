@@ -6,6 +6,7 @@
 #   - build now FAILS if pyrogram/pytgcalls can't be imported, so a
 #     broken image is never deployed
 #   - temporary compiler added only for the pip step, then purged
+#   - added libatomic1 (required by Playwright's bundled node driver)
 # ─────────────────────────────────────────────────────────────
 FROM python:3.10-slim-bookworm
 
@@ -26,6 +27,7 @@ RUN apt-get update \
         gnupg \
         ca-certificates \
         ffmpeg \
+        libatomic1 \
         libnss3 \
         libnspr4 \
         libatk1.0-0 \
