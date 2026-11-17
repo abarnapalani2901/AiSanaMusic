@@ -26,6 +26,7 @@ SQLAlchemy
 mysql-connector-python==9.0.0
 
 # --- Media / downloaders ---
+typetube
 yt-dlp
 pytube
 youtube_search
